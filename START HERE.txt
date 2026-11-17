@@ -1,0 +1,32 @@
+ROBLOX REFERENCE LIBRARY - WINDOWS 64-BIT
+
+1. Extract the Roblox Reference Library application ZIP.
+2. Download the original Everything dataset from:
+   https://tools.frrazers.com/dataset/
+3. Extract that dataset ZIP. Keep its original filenames and icons/ and thumbs/ folders.
+4. Run Start Gallery.cmd in the application folder.
+
+The launcher finds Downloads\roblox-icons-thumbnails automatically when possible.
+Otherwise, paste the path of the extracted dataset folder when asked. Enter D at
+that prompt to open the original download page. The folder path is remembered.
+If you already have the original dataset, use it directly; no second copy is needed.
+
+The application download does not contain or redistribute the original images.
+They are provided separately by frrazers. The gallery reads them in place without
+renaming, moving, or editing their contents or embedded metadata.
+
+Saved game information and the complete scene-search index are included with the
+application. Browsing, filters, and similarity work immediately after choosing the
+dataset, without repeating collection or image analysis. No Codex, Python
+installation, GPU, account, or paid service is required.
+
+After setup, the included collection can be browsed offline. Updating game details
+or analyzing new images from source is separate and may require internet access
+and optional image-model dependencies.
+
+Keep the console window open while using the gallery. Close it or click Stop gallery
+to quit. Allow around 15 GB if you keep both the original dataset ZIP and extracted
+files. The application itself adds less than 1 GB after extraction.
+
+Windows 10/11, 64-bit Intel/AMD. See README.md for source use on other platforms.
+See NOTICE.md for dataset attribution and artwork rights.
