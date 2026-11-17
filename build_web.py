@@ -50,11 +50,21 @@ def build(cache, output):
             parts.append({'url': f'data/{filename}', 'rows': len(block), 'bytes': len(compressed), 'sha256': digest})
     catalogue = {'schema': 1, 'games': games, 'image_count': len(images), 'visual': {'dimensions': 560, 'parts': parts}}
     raw = json.dumps(catalogue, separators=(',', ':'), ensure_ascii=False).encode()
-    (data_dir / 'catalog.json.gz').write_bytes(gzip.compress(raw, mtime=0))
-    for filename in ('app.js', 'style.css', 'LICENSE', 'NOTICE.md'):
+    compressed_catalogue = gzip.compress(raw, mtime=0)
+    catalogue_name = f'catalog.{hashlib.sha256(compressed_catalogue).hexdigest()[:12]}.json.gz'
+    (data_dir / catalogue_name).write_bytes(compressed_catalogue)
+    for filename in ('LICENSE', 'NOTICE.md'):
         shutil.copyfile(HERE / filename, output / filename)
-    for filename in ('web-host.js', 'web-core.mjs', 'search-worker.js', 'web.css'):
-        shutil.copyfile(HERE / 'web' / filename, output / filename)
+    assets = {'catalog.json.gz': catalogue_name}
+    for filename in ('web-core.mjs', 'search-worker.js', 'web-host.js', 'app.js', 'style.css', 'web.css'):
+        source = HERE / filename if filename in ('app.js', 'style.css') else HERE / 'web' / filename
+        content = source.read_text(encoding='utf-8')
+        for original, hashed in assets.items():
+            content = content.replace(original, hashed)
+        digest = hashlib.sha256(content.encode()).hexdigest()[:12]
+        hashed = f'{source.stem}.{digest}{source.suffix}'
+        (output / hashed).write_text(content, encoding='utf-8')
+        assets[filename] = hashed
     html = (HERE / 'index.html').read_text(encoding='utf-8')
     html = html.replace('href="/style.css"', 'href="./style.css"').replace('href="/"', 'href="./"')
     html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
@@ -64,6 +74,8 @@ def build(cache, output):
     html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
     html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob:; script-src \'self\'; style-src \'self\'; connect-src \'self\'; worker-src \'self\'; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    for original, hashed in assets.items():
+        html = html.replace(original, hashed)
     (output / 'index.html').write_text(html, encoding='utf-8')
     (output / '.nojekyll').write_text('')
     print(f'Built {len(games):,} games / {len(images):,} images. No image files copied. Visual download: {sum(p["bytes"] for p in parts) / 1048576:.1f} MiB.')

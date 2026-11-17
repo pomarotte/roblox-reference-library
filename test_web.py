@@ -24,7 +24,7 @@ class WebExportTests(unittest.TestCase):
             (root / 'secret.webp').write_bytes(b'never copy')
             output = root / 'site'
             build(root, output)
-            catalog = json.loads(gzip.decompress((output / 'data/catalog.json.gz').read_bytes()))
+            catalog = json.loads(gzip.decompress(next((output / 'data').glob('catalog.*.json.gz')).read_bytes()))
             self.assertEqual(catalog['games'][0]['name'], 'A <game>')
             self.assertEqual(catalog['image_count'],1)
             self.assertEqual(len(gzip.decompress((output / catalog['visual']['parts'][0]['url']).read_bytes())),560*2)
@@ -35,6 +35,7 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('class="web-disconnected"',html)
             self.assertIn('blob:',html)
             self.assertNotIn('src="/',html)
+            self.assertNotIn('src="./app.js"',html)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))
             with self.assertRaisesRegex(ValueError,'every image'):
                 build(root,output)
