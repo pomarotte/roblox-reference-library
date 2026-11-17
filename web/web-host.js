@@ -60,6 +60,7 @@
     folder = candidate;
     localFiles = files;
     connected = true;
+    document.body.classList.remove('web-disconnected');
     el('folder-title').textContent = label;
     el('folder-status').textContent = `${available.length.toLocaleString()} / ${images.size.toLocaleString()} saved images connected${available.length === images.size ? '. Ready to explore.' : '. Missing files are left out of results.'}`;
     el('choose-folder').textContent = 'Change dataset folder ↗';
@@ -168,6 +169,7 @@
         folder = null;
         localFiles.clear();
         connected = false;
+        document.body.classList.add('web-disconnected');
         remembered = null;
         await storeHandle(null);
         await rpc('available', []);

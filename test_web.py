@@ -32,6 +32,7 @@ class WebExportTests(unittest.TestCase):
             self.assertFalse((output / 'dataset-path.txt').exists())
             html = (output / 'index.html').read_text(encoding='utf-8')
             self.assertIn('webkitdirectory',html)
+            self.assertIn('class="web-disconnected"',html)
             self.assertIn('blob:',html)
             self.assertNotIn('src="/',html)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))

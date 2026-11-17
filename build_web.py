@@ -61,6 +61,7 @@ def build(cache, output):
     html = html.replace('<section class="sync-panel"', (HERE / 'web' / 'setup.html').read_text(encoding='utf-8') + '\n    <section class="sync-panel"', 1)
     html = html.replace('>Stop gallery</button>', '>Disconnect folder</button>')
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
+    html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
     html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob:; script-src \'self\'; style-src \'self\'; connect-src \'self\'; worker-src \'self\'; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     (output / 'index.html').write_text(html, encoding='utf-8')
