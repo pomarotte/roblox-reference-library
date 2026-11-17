@@ -4,6 +4,26 @@ Explore Roblox game icons and thumbnails locally, filter by game type and popula
 and find references with similar scenes. The software is open source under the MIT license;
 see NOTICE.md for the separate rights associated with game artwork.
 
+## Browser edition
+
+[Open the website](https://pomarotte.github.io/roblox-reference-library/), download and extract
+the original **Everything** dataset from [frrazers tools](https://tools.frrazers.com/dataset/),
+then choose its folder containing **icons** and **thumbs**. No application installation or local
+server is needed. Image files are read on the visitor's computer; they are never uploaded or changed.
+Chrome and Edge can remember the folder with permission; other desktop browsers can use the
+standard folder picker and select it again on each visit. Partial collections show available images
+only, with missing files reported. The browser must support directory selection and gzip decompression.
+
+The website includes the saved game catalogue. Visual search downloads about 143 MiB of prepared
+scene features the first time it is used, caching them when browser storage is available. Searching
+runs in a browser worker, prioritizing scenes over palette just like the desktop edition. There is
+no GPU service, image upload, or paid search API. Desktop browsers are recommended for the full index.
+Browser storage eviction or private browsing can require downloading the index again.
+
+Build the static website with `python build_web.py` (NumPy required). The output is `.web-build/`.
+The GitHub Pages workflow builds from the checksum-pinned public app release, extracting only the
+saved database and visual index. Images and machine-specific paths never enter the website bundle.
+
 ## Portable Windows download
 
 [Download the Windows app](https://github.com/pomarotte/roblox-reference-library/releases/latest)

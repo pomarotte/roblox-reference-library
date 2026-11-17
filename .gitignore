@@ -9,3 +9,4 @@ collection.json
 gallery-preview.jpg
 search-index.npz*
 dataset-path.txt*
+.web-build/

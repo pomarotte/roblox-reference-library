@@ -11,10 +11,15 @@ let hoverGeneration = 0;
 const imageLists = new Map();
 
 async function api(path, options = {}) {
+  if (window.galleryHost) return window.galleryHost.api(path, options);
   const response = await fetch(path, options);
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
   return data;
+}
+function imageSource(element, id) {
+  if (window.galleryHost) return window.galleryHost.imageSource(element, id);
+  element[element.tagName === 'A' ? 'href' : 'src'] = `/image/${id}`;
 }
 function node(tag, className, text) {
   const element = document.createElement(tag);
@@ -61,10 +66,10 @@ async function status() {
       updateSubgenres();
     }
   } catch (error) {
-    $('sync-message').textContent = 'Cannot reach the local server. Start the gallery launcher to reconnect.';
+    $('sync-message').textContent = window.galleryHost ? error.message : 'Cannot reach the local server. Start the gallery launcher to reconnect.';
   } finally {
     clearTimeout(statusTimer);
-    statusTimer = setTimeout(status, 5000);
+    if (!window.galleryHost) statusTimer = setTimeout(status, 5000);
   }
 }
 function parameters() {
@@ -90,7 +95,7 @@ function card(game) {
   button.setAttribute('aria-label', `Explore ${game.name || 'game ' + game.id}`);
   const imageBox = node('div', 'card-image');
   const image = node('img');
-  image.src = `/image/${game.image_id}`;
+  imageSource(image, game.image_id);
   image.alt = `${kind === 'icons' ? 'Icon' : 'Thumbnail'} for ${game.name || 'game ' + game.id}`;
   image.loading = 'lazy';
   image.decoding = 'async';
@@ -115,7 +120,7 @@ function card(game) {
       if (token === hoverGeneration) hoverGeneration++;
       clearInterval(timer);
       displayedImageId = game.image_id;
-      image.src = `/image/${game.image_id}`;
+      imageSource(image, game.image_id);
       counter.textContent = `${game.image_count} saved`;
     };
     stopHover = ownStop;
@@ -128,7 +133,7 @@ function card(game) {
         if (!button.isConnected) return ownStop();
         index = (index + 1) % images.length;
         displayedImageId = images[index].id;
-        image.src = `/image/${displayedImageId}`;
+        imageSource(image, displayedImageId);
         counter.textContent = `${index + 1} / ${images.length}`;
       }, 1000);
     } catch (_) { ownStop(); }
@@ -194,7 +199,7 @@ async function openGame(id, trigger, imageId) {
       button.type = 'button';
       button.setAttribute('aria-label', `Saved image ${index + 1}, ${savedDate(image.captured)}`);
       const preview = node('img');
-      preview.src = `/image/${image.id}`;
+      imageSource(preview, image.id);
       preview.alt = '';
       preview.loading = 'lazy';
       button.append(preview);
@@ -211,11 +216,11 @@ async function openGame(id, trigger, imageId) {
 function showImage(index) {
   imageIndex = (index + selectedImages.length) % selectedImages.length;
   const image = selectedImages[imageIndex];
-  $('preview').src = `/image/${image.id}`;
+  imageSource($('preview'), image.id);
   $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, saved image ${imageIndex + 1}`;
   $('filename').textContent = image.filename;
   $('image-info').textContent = `${imageIndex + 1} / ${selectedImages.length} · Saved ${savedDate(image.captured)}`;
-  $('open-image').href = `/image/${image.id}`;
+  imageSource($('open-image'), image.id);
   $('image-prev').disabled = $('image-next').disabled = selectedImages.length < 2;
   [...$('filmstrip').children].forEach((button, i) => button.setAttribute('aria-pressed', String(i === imageIndex)));
   $('filmstrip').children[imageIndex]?.scrollIntoView({block: 'nearest', inline: 'nearest'});
@@ -273,7 +278,7 @@ function clearSimilarity() {
 $('find-similar').addEventListener('click', () => {
   if (!reference) viewBeforeSimilarity = $('all-images').checked;
   reference = {imageId: selectedImages[imageIndex].id, name: selectedGame.name || `Game ${selectedGame.id}`};
-  $('reference-image').src = `/image/${reference.imageId}`;
+  imageSource($('reference-image'), reference.imageId);
   $('reference-name').textContent = reference.name;
   $('similarity-panel').hidden = false;
   $('similarity-mode').value = selectedGame.genre && selectedGame.genre !== 'Unknown' ? 'both' : 'visual';
@@ -302,6 +307,7 @@ $('reveal').addEventListener('click', async () => {
 $('quit').addEventListener('click', async () => {
   try {
     await api('/api/quit', {method: 'POST'});
+    if (window.galleryHost) return;
     clearTimeout(statusTimer);
     activeRequest?.abort();
     $('sync-title').textContent = 'Gallery stopped';
@@ -310,5 +316,6 @@ $('quit').addEventListener('click', async () => {
     $('quit').disabled = true;
   } catch (error) { $('sync-message').textContent = error.message; }
 });
+window.addEventListener('gallery:connected', () => { imageLists.clear(); status(); load(true); });
 status();
 load();
