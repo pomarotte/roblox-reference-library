@@ -6,7 +6,8 @@ see NOTICE.md for the separate rights associated with game artwork.
 
 ## Portable Windows download
 
-Download and extract the application ZIP. Get the original **Everything** dataset from
+[Download the Windows app](https://github.com/pomarotte/roblox-reference-library/releases/latest)
+and extract the application ZIP. Get the original **Everything** dataset from
 [frrazers tools](https://tools.frrazers.com/dataset/) and extract it without renaming the images.
 Run **Start Gallery.cmd** in the app folder. It finds the dataset in Downloads when possible;
 otherwise, paste the extracted folder path. Enter D at the prompt to open the download page.
