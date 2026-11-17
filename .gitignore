@@ -1,0 +1,11 @@
+__pycache__/
+library.sqlite3*
+*.log
+models/
+runtime/
+.release-build/
+releases/
+collection.json
+gallery-preview.jpg
+search-index.npz*
+dataset-path.txt*
