@@ -4,6 +4,22 @@
   const pending = new Map(), urls = new Map(), imageRequests = new WeakMap();
   const el = id => document.getElementById(id);
   let sequence = 0, catalogue, images, folder, localFiles = new Map(), remembered, connected = false, connectionVersion = 0;
+  const nextPaint = () => new Promise(resolve => setTimeout(resolve, 0));
+  function datasetLoading(title, message, checked = 0, total = 0) {
+    el('dataset-loading').hidden = false;
+    el('dataset-loading-title').textContent = title;
+    el('dataset-loading-message').textContent = message;
+    if (total) {
+      el('dataset-loading-progress').max = total;
+      el('dataset-loading-progress').value = checked;
+    } else el('dataset-loading-progress').removeAttribute('value');
+    el('choose-folder').disabled = el('reconnect-folder').disabled = true;
+  }
+  function finishDatasetLoading() {
+    el('dataset-loading').hidden = true;
+    el('choose-folder').disabled = !images;
+    el('reconnect-folder').disabled = false;
+  }
   worker.onmessage = ({data}) => {
     if ('progress' in data) {
       el('visual-message').textContent = data.progress;
@@ -56,6 +72,7 @@
     const counts = {icons: 0, thumbs: 0};
     for (const id of available) counts[images.get(id).kind]++;
     if (!counts.icons || !counts.thumbs) throw new Error('Select the parent dataset folder containing both icons and thumbs.');
+    datasetLoading('Opening gallery', `${available.length.toLocaleString()} local images ready`, available.length, available.length);
     await rpc('available', available);
     connectionVersion++;
     revokeImages();
@@ -65,34 +82,44 @@
     document.body.classList.remove('web-disconnected');
     el('folder-title').textContent = label;
     el('folder-status').textContent = `${available.length.toLocaleString()} / ${images.size.toLocaleString()} saved images connected${available.length === images.size ? '. Ready to explore.' : '. Missing files are left out of results.'}`;
-    el('choose-folder').textContent = 'Change dataset folder ↗';
+    el('choose-folder').textContent = 'Change folder';
     el('reconnect-folder').hidden = true;
     el('quit').disabled = false;
     el('choose-folder').closest('section').classList.add('connected');
     refreshed();
   }
   async function connectHandle(handle) {
-    el('folder-status').textContent = 'Checking image filenames on your computer…';
-    let candidate = handle, directories;
-    for (const child of [null, 'roblox-icons-thumbnails']) {
-      try {
-        candidate = child ? await handle.getDirectoryHandle(child) : handle;
-        directories = {icons: await candidate.getDirectoryHandle('icons'), thumbs: await candidate.getDirectoryHandle('thumbs')};
-        break;
-      } catch (_) { directories = null; }
-    }
-    if (!directories) throw new Error('This folder needs icons and thumbs subfolders. Extract the Everything dataset first.');
-    const byPath = new Map([...images].map(([id, image]) => [`${image.kind}/${image.filename}`, id]));
-    const available = [];
-    for (const kind of ['icons', 'thumbs']) {
-      for await (const [name, handle] of directories[kind].entries()) {
-        const id = byPath.get(`${kind}/${name}`);
-        if (handle.kind === 'file' && id !== undefined) available.push(id);
+    datasetLoading('Loading dataset', 'Reading your local image folders…');
+    await nextPaint();
+    try {
+      let candidate = handle, directories;
+      for (const child of [null, 'roblox-icons-thumbnails']) {
+        try {
+          candidate = child ? await handle.getDirectoryHandle(child) : handle;
+          directories = {icons: await candidate.getDirectoryHandle('icons'), thumbs: await candidate.getDirectoryHandle('thumbs')};
+          break;
+        } catch (_) { directories = null; }
       }
+      if (!directories) throw new Error('This folder needs icons and thumbs subfolders. Extract the Everything dataset first.');
+      const byPath = new Map([...images].map(([id, image]) => [`${image.kind}/${image.filename}`, id]));
+      const available = [];
+      let checked = 0;
+      for (const kind of ['icons', 'thumbs']) {
+        for await (const [name, entry] of directories[kind].entries()) {
+          const id = byPath.get(`${kind}/${name}`);
+          if (entry.kind === 'file' && id !== undefined) available.push(id);
+          if (++checked % 2000 === 0) {
+            datasetLoading('Loading dataset', `${checked.toLocaleString()} local files checked`);
+            await nextPaint();
+          }
+        }
+      }
+      await activate(available, candidate.name, directories);
+      remembered = candidate;
+      await storeHandle(candidate);
+    } finally {
+      finishDatasetLoading();
     }
-    await activate(available, candidate.name, directories);
-    remembered = candidate;
-    await storeHandle(candidate);
   }
   async function choose() {
     if (!window.showDirectoryPicker) return el('folder-input').click();
@@ -100,17 +127,16 @@
       const handle = await window.showDirectoryPicker({mode: 'read', id: 'roblox-dataset'});
       await connectHandle(handle);
     } catch (error) {
-      if (error.name !== 'AbortError') el('folder-status').textContent = error.message;
+      if (error.name === 'SecurityError' || error.name === 'TypeError') el('folder-input').click();
+      else if (error.name !== 'AbortError') el('folder-status').textContent = error.message;
     }
   }
   const ready = rpc('init').then(async data => {
     catalogue = data;
     images = new Map();
     for (const game of data.games) for (const image of game.images) images.set(image.id, image);
-    el('folder-status').textContent = 'Choose your extracted dataset folder. Images stay on this computer.';
-    el('choose-folder').disabled = false;
+    el('folder-status').textContent = '';
     el('quit').disabled = true;
-    el('fallback-folder').hidden = !window.showDirectoryPicker;
     remembered = await storeHandle();
     if (remembered && window.showDirectoryPicker) {
       if (await remembered.queryPermission({mode: 'read'}) === 'granted') {
@@ -118,9 +144,8 @@
       } else el('reconnect-folder').hidden = false;
     }
     return data;
-  }).catch(error => { el('folder-status').textContent = error.message; throw error; });
+  }).catch(error => { el('folder-status').textContent = error.message; throw error; }).finally(finishDatasetLoading);
   el('choose-folder').addEventListener('click', choose);
-  el('fallback-folder').addEventListener('click', () => el('folder-input').click());
   el('reconnect-folder').addEventListener('click', async () => {
     try {
       if (await remembered.requestPermission({mode: 'read'}) !== 'granted') throw new Error('Folder access was not granted. You can choose the folder again.');
@@ -128,13 +153,20 @@
     } catch (error) { el('folder-status').textContent = error.message; }
   });
   el('folder-input').addEventListener('change', async event => {
+    if (!event.target.files.length) return;
+    datasetLoading('Loading dataset', 'Checking your local image files…');
     try {
+      await nextPaint();
       const {matchLocalFiles} = await import('./web-core.mjs');
-      const files = matchLocalFiles(event.target.files, images);
+      const files = await matchLocalFiles(event.target.files, images, async (checked, total) => {
+        datasetLoading('Loading dataset', `${checked.toLocaleString()} / ${total.toLocaleString()} files checked`, checked, total);
+        await nextPaint();
+      });
       await activate([...files.keys()], event.target.files[0]?.webkitRelativePath.split('/')[0] || 'Local dataset', null, files);
       remembered = null;
       await storeHandle(null);
     } catch (error) { el('folder-status').textContent = error.message; }
+    finally { finishDatasetLoading(); }
     event.target.value = '';
   });
   async function imageURL(id) {
@@ -178,7 +210,7 @@
         revokeImages();
         el('folder-title').textContent = 'Connect your image collection.';
         el('folder-status').textContent = 'Folder disconnected. Choose it again whenever you want to browse.';
-        el('choose-folder').textContent = 'Choose dataset folder ↗';
+        el('choose-folder').textContent = 'Select folder';
         el('choose-folder').closest('section').classList.remove('connected');
         el('quit').disabled = true;
         refreshed();

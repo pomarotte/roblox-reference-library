@@ -79,7 +79,7 @@ function parameters() {
     params.set('seed_image', reference.imageId);
     params.set('similarity', $('similarity-mode').value);
   }
-  for (const id of ['search', 'genre', 'subgenre', 'min_visits']) {
+  for (const id of ['search', 'genre', 'subgenre', 'min_visits', 'max_visits']) {
     if ($(id).value) params.set(id, $(id).value);
   }
   return params;
@@ -148,6 +148,7 @@ function card(game) {
 }
 async function load(reset = false) {
   stopHover();
+  $('explore-title').textContent = kind === 'icons' ? 'Explore Icons' : 'Explore Thumbnails';
   if (reset) { page = 0; window.scrollTo({top: 0}); }
   const current = ++generation;
   activeRequest?.abort();
@@ -251,14 +252,16 @@ function showImage(index) {
 let debounce;
 function scheduleLoad() { clearTimeout(debounce); debounce = setTimeout(() => load(true), 300); }
 $('filters').addEventListener('submit', event => event.preventDefault());
-for (const id of ['search', 'min_visits']) $(id).addEventListener('input', () => {
+for (const id of ['search', 'min_visits', 'max_visits']) $(id).addEventListener('input', () => {
   if (id !== 'search') $('range').value = '';
   scheduleLoad();
 });
 $('genre').addEventListener('change', () => { $('subgenre').value = ''; updateSubgenres(); load(true); });
 $('subgenre').addEventListener('change', () => load(true));
 $('range').addEventListener('change', () => {
-  $('min_visits').value = $('range').value;
+  const [minimum = '', maximum = ''] = $('range').value.split(':');
+  $('min_visits').value = minimum;
+  $('max_visits').value = maximum;
   load(true);
 });
 $('sort').addEventListener('change', () => load(true));

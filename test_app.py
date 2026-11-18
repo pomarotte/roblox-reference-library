@@ -52,8 +52,10 @@ class LibraryTests(unittest.TestCase):
     def test_filtering_sorting_and_unknown_visits(self):
         self.populate()
         results = self.library.query(parse_qs('min_visits=0'))
-        self.assertEqual([r['id'] for r in results['items']], [11])
-        self.assertEqual(self.library.query(parse_qs('min_visits=200'))['total'], 0)
+        self.assertEqual([r['id'] for r in results['items']], [11,22])
+        self.assertEqual(self.library.query(parse_qs('min_visits=200&max_visits=200'))['total'], 1)
+        self.assertEqual(self.library.query(parse_qs('max_visits=0'))['items'][0]['id'],22)
+        self.assertEqual(self.library.query(parse_qs('min_visits=201'))['total'],0)
         self.assertEqual(self.library.query(parse_qs('min_visits=199'))['total'], 1)
         self.assertEqual(self.library.query(parse_qs('genre=Simulation&subgenre=Tycoon'))['total'], 1)
         self.assertEqual(self.library.query(parse_qs('search=100%25'))['total'], 1)
@@ -72,7 +74,7 @@ class LibraryTests(unittest.TestCase):
             self.library.save_batch([11], {'data': [{'id': 999, 'visits': 1}]})
 
     def test_invalid_query_is_rejected(self):
-        for query in ('offset=-1', 'kind=../', 'sort=name;DELETE', 'min_visits=-1', 'min_visits=999999999999999999999999', 'all_images=maybe', 'similarity=magic'):
+        for query in ('offset=-1', 'kind=../', 'sort=name;DELETE', 'min_visits=-1', 'max_visits=-1', 'min_visits=200&max_visits=100', 'min_visits=999999999999999999999999', 'all_images=maybe', 'similarity=magic'):
             with self.subTest(query=query), self.assertRaises(ValueError):
                 self.library.query(parse_qs(query))
 
@@ -95,7 +97,7 @@ class LibraryTests(unittest.TestCase):
         self.assertNotIn('embedding', visual[0])
         for mode in ('both', 'type'):
             self.assertEqual([r['id'] for r in self.library.query(parse_qs(base + mode))['items']], [33])
-        self.assertEqual(self.library.query(parse_qs(base + 'both&min_visits=100'))['total'], 0)
+        self.assertEqual(self.library.query(parse_qs(base + 'both&min_visits=100&max_visits=100'))['total'], 1)
         with self.library.connect() as db:
             duplicate = db.execute('INSERT INTO images(game_id,kind,filename,captured) VALUES (22,\'thumbs\',\'22_20260402_120001_0.webp\',\'20260402_120001\')').lastrowid
             db.execute('INSERT INTO image_vectors(image_id,hash) VALUES (?,?)', (duplicate, str(other)))

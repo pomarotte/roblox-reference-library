@@ -1,9 +1,10 @@
+<div id="dataset-loading" class="dataset-loading" role="status" aria-live="polite"><div class="dataset-loading-card"><span class="loading-spinner" aria-hidden="true"></span><h3 id="dataset-loading-title">Preparing explorer</h3><p id="dataset-loading-message">Loading saved game information…</p><progress id="dataset-loading-progress" aria-label="Dataset loading progress"></progress><small>Images stay on your computer.</small></div></div>
 <section class="folder-panel" aria-labelledby="folder-title">
   <div><span class="eyebrow">ON YOUR COMPUTER. IN YOUR BROWSER.</span><h3 id="folder-title">Connect your image collection.</h3>
-    <p>Download and extract <a href="https://tools.frrazers.com/dataset/" target="_blank" rel="noopener noreferrer">Everything from frrazers</a>, then choose the folder containing <strong>icons</strong> and <strong>thumbs</strong>.</p>
-    <p class="privacy-copy">The website reads your images on this computer. Nothing is uploaded or changed. Game information and scene matching are already prepared. The standard picker may call selection “Upload”; this website keeps the selected files local.</p>
+    <p>Download <a href="https://tools.frrazers.com/dataset/" target="_blank" rel="noopener noreferrer">Everything from frrazers</a>.</p>
+    <p>Unzip the file, select the <strong>roblox-icons-thumbnails</strong> folder, then click <strong>Select folder</strong>.</p>
     <p id="folder-status" role="status">Loading the saved catalogue…</p>
   </div>
-  <div class="folder-actions"><button id="choose-folder" class="primary" type="button" disabled>Choose dataset folder ↗</button><button id="reconnect-folder" class="secondary" type="button" hidden>Reconnect previous folder</button><button id="fallback-folder" class="text-button" type="button" hidden>Use standard folder picker</button></div>
+  <div class="folder-actions"><button id="choose-folder" class="primary" type="button" disabled>Select folder</button><button id="reconnect-folder" class="secondary" type="button" hidden>Reconnect previous folder</button></div>
   <input id="folder-input" type="file" webkitdirectory multiple hidden aria-label="Choose extracted dataset folder">
 </section>

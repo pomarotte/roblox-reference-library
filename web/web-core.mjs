@@ -14,14 +14,17 @@ export function prepareCatalogue(catalogue) {
   return {catalogue, games, images, ordered};
 }
 
-export function matchLocalFiles(files, images) {
+export async function matchLocalFiles(files, images, onProgress = () => {}) {
   const available = new Map();
   const byPath = new Map([...images.values()].map(image => [`${image.kind}/${image.filename}`, image.id]));
+  let checked = 0;
   for (const file of files) {
     const path = (file.webkitRelativePath || '').replaceAll('\\', '/').split('/');
     const key = path.slice(-2).join('/');
     const id = byPath.get(key);
     if (id !== undefined && file.size > 0) available.set(id, file);
+    checked++;
+    if (checked % 2000 === 0 || checked === files.length) await onProgress(checked, files.length);
   }
   return available;
 }
@@ -57,7 +60,14 @@ export function queryLibrary(state, params, available, matrix = null) {
   if (visual && !matrix) throw new Error('Load the saved scene index first.');
   const allImages = visual || params.get('all_images') === '1';
   const search = (params.get('search') || '').trim().slice(0, 200).toLowerCase();
-  const minimum = params.get('min_visits');
+  function visitBound(key) {
+    const value = params.get(key);
+    if (value === null || value === '') return null;
+    if (!/^\d{1,18}$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error('Enter a valid non-negative visit count.');
+    return Number(value);
+  }
+  const minimum = visitBound('min_visits'), maximum = visitBound('max_visits');
+  if (minimum !== null && maximum !== null && minimum > maximum) throw new Error('Minimum visits must not exceed maximum visits.');
   const results = [];
   for (const game of state.games.values()) {
     if (seed && game.id === seed.game.id) continue;
@@ -65,7 +75,8 @@ export function queryLibrary(state, params, available, matrix = null) {
     if (params.get('genre') && (game.genre || 'Unknown') !== params.get('genre')) continue;
     if (params.get('subgenre') && (game.subgenre || 'Unknown') !== params.get('subgenre')) continue;
     if (search && !(game.name || '').toLowerCase().includes(search) && String(game.id) !== search) continue;
-    if (minimum !== null && minimum !== '' && (game.visits === null || game.visits <= Number(minimum))) continue;
+    if (minimum !== null && (game.visits === null || game.visits < minimum)) continue;
+    if (maximum !== null && (game.visits === null || game.visits > maximum)) continue;
     const saved = game.images.filter(image => image.kind === kind && available.has(image.id));
     for (const image of allImages ? saved : saved.slice(0, 1)) {
       const item = {id: game.id, name: game.name, genre: game.genre, subgenre: game.subgenre, visits: game.visits, status: game.status, image_count: saved.length, image_id: image.id, captured: image.captured};

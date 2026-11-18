@@ -133,6 +133,9 @@ class Library:
             raise ValueError('Invalid image grouping')
         all_images = all_images == '1'
         minimum = number('min_visits')
+        maximum = number('max_visits')
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError('Minimum visits must not exceed maximum visits.')
         where, values = ['i.id IS NOT NULL'], []
         mode = params.get('similarity', [''])[0]
         if mode not in ('', 'visual', 'type', 'both'):
@@ -167,8 +170,11 @@ class Library:
             escaped = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
             values.extend((f'%{escaped}%', search))
         if minimum is not None:
-            where.append('g.visits > ?')
+            where.append('g.visits >= ?')
             values.append(minimum)
+        if maximum is not None:
+            where.append('g.visits <= ?')
+            values.append(maximum)
         sorts = {'visits': 'g.visits DESC,g.id,i.captured DESC,i.id DESC', 'least': 'g.visits IS NULL,g.visits,g.id,i.id DESC',
                  'name': 'g.name IS NULL,g.name COLLATE NOCASE,g.id,i.id DESC', 'recent': 'i.captured DESC,g.id,i.id DESC'}
         sort = sorts.get(params.get('sort', ['visits'])[0])

@@ -1,4 +1,6 @@
-# Roblox Reference Library
+# Thumbnails Explorer
+
+By [Poom](https://www.roblox.com/users/48069218/profile).
 
 Explore Roblox game icons and thumbnails locally, filter by game type and popularity,
 and find references with similar scenes. The software is open source under the MIT license;
@@ -55,7 +57,7 @@ SHA256SUMS.txt contains the application-download checksum.
 
 ## Browsing
 
-- Search by game name or universe ID; filter by genre, subgenre, and games over a visit count.
+- Search by game name or universe ID; filter by genre, subgenre, and an inclusive From/To visit range.
 - Switch between thumbnails and icons, change preview size, and sort results.
 - Choose 60, 120, 240, or 480 results per page (default 240).
 - Hover over a card to cycle through that game's images. Moving away restores the original.
@@ -75,7 +77,7 @@ SHA256SUMS.txt contains the application-download checksum.
 
 Open a card, choose an image, and click **Find similar**. Choose **Visual appearance**, **Game type**,
 or **Visual + game type**. Game type uses the same genre and, when available, subgenre. The combined
-mode ranks visually within that game type. Visit thresholds continue to apply; other filters can
+mode ranks visually within that game type. Visit ranges continue to apply; other filters can
 further narrow the results. The source game is excluded. Visual search returns up to 480 closest
 matches. Visual and combined searches always show individual saved images, displaying the
 exact matched thumbnail. Hover cycling is paused in these results. Game-type-only searches
