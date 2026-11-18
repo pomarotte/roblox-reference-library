@@ -9,6 +9,7 @@ let statusTimer, reference = null, stopHover = () => {};
 let viewBeforeSimilarity;
 let hoverGeneration = 0;
 const imageLists = new Map();
+const saved = window.galleryHost?.saved;
 
 async function api(path, options = {}) {
   if (window.galleryHost) return window.galleryHost.api(path, options);
@@ -75,6 +76,10 @@ async function status() {
 function parameters() {
   const params = new URLSearchParams({kind, offset: page * pageSize, limit: pageSize, sort: $('sort').value});
   params.set('all_images', $('all-images').checked ? '1' : '0');
+  if (saved?.active) {
+    params.set('saved_ids', JSON.stringify(saved.ids));
+    params.set('all_images', '1');
+  }
   if (reference) {
     params.set('seed_image', reference.imageId);
     params.set('similarity', $('similarity-mode').value);
@@ -111,9 +116,10 @@ function card(game) {
   button.append(imageBox, node('h3', '', game.name || `Game ${game.id}`), meta, node('span', 'card-subgenre', game.subgenre || (game.status === 'unavailable' ? 'Metadata unavailable' : 'Information still being collected')));
   if (game.similarity_score !== undefined) button.append(node('span', 'match-score', `Visual match · ${game.similarity_score.toFixed(2)}`));
   let ownStop = () => {};
+  const root = saved ? saved.card(button, game, () => displayedImageId) : button;
   async function cycle() {
     stopHover();
-    if (game.similarity_score !== undefined) return;
+    if (game.similarity_score !== undefined || saved?.active) return;
     if (game.image_count < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const token = ++hoverGeneration;
     let timer;
@@ -132,6 +138,7 @@ function card(game) {
       let index = Math.max(0, images.findIndex(item => item.id === game.image_id));
       timer = setInterval(() => {
         if (!button.isConnected) return ownStop();
+        if (root.querySelector('.card-save-actions:hover, .card-save-actions:focus-within')) return;
         index = (index + 1) % images.length;
         displayedImageId = images[index].id;
         imageSource(image, displayedImageId);
@@ -139,16 +146,16 @@ function card(game) {
       }, 1000);
     } catch (_) { ownStop(); }
   }
-  button.addEventListener('pointerenter', cycle);
-  button.addEventListener('pointerleave', () => ownStop());
+  root.addEventListener('pointerenter', cycle);
+  root.addEventListener('pointerleave', () => ownStop());
   button.addEventListener('focus', () => { if (!button.matches(':hover')) cycle(); });
   button.addEventListener('blur', () => ownStop());
   button.addEventListener('click', () => openGame(game.id, button, displayedImageId));
-  return button;
+  return root;
 }
 async function load(reset = false) {
   stopHover();
-  $('explore-title').textContent = kind === 'icons' ? 'Explore Icons' : 'Explore Thumbnails';
+  $('explore-title').textContent = saved?.title || (kind === 'icons' ? 'Explore Icons' : 'Explore Thumbnails');
   if (reset) { page = 0; window.scrollTo({top: 0}); }
   const current = ++generation;
   activeRequest?.abort();
@@ -169,7 +176,7 @@ async function load(reset = false) {
     $('grid').classList.toggle('icons', kind === 'icons');
     $('grid').replaceChildren(...data.items.map(card));
     $('empty').hidden = total !== 0;
-    const unit = $('all-images').checked ? 'images' : 'games';
+    const unit = saved?.active || $('all-images').checked ? 'images' : 'games';
     const prefix = reference && $('similarity-mode').value !== 'type' ? 'Closest ' : '';
     $('result-count').textContent = total ? `${prefix}${format.format(total)} ${unit} · Showing ${format.format(page * pageSize + 1)}–${format.format(page * pageSize + data.items.length)}` : `0 matching ${unit}`;
     $('page-label').textContent = `Page ${page + 1} of ${Math.max(1, Math.ceil(total / pageSize))}`;
@@ -240,6 +247,7 @@ async function openGame(id, trigger, imageId) {
 function showImage(index) {
   imageIndex = (index + selectedImages.length) % selectedImages.length;
   const image = selectedImages[imageIndex];
+  saved?.showImage(image.id);
   imageSource($('preview'), image.id);
   $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, saved image ${imageIndex + 1}`;
   $('filename').textContent = image.filename;
@@ -271,6 +279,7 @@ document.querySelector('.brand').addEventListener('click', event => {
   event.preventDefault();
   $('viewer').close();
   $('filters').reset();
+  saved?.reset();
   clearSimilarity();
   kind = 'thumbs';
   pageSize = 240;
@@ -306,8 +315,8 @@ $('visual-button').addEventListener('click', async () => {
 });
 function similaritySort() {
   const visual = reference && $('similarity-mode').value !== 'type';
-  $('all-images').disabled = Boolean(visual);
-  if (visual) $('all-images').checked = true;
+  $('all-images').disabled = Boolean(visual || saved?.active);
+  if (visual || saved?.active) $('all-images').checked = true;
   $('sort').disabled = Boolean(visual);
   $('sort').options[0].textContent = visual ? 'Best visual match' : 'Most visits';
   if (visual) $('sort').value = 'visits';
@@ -319,6 +328,7 @@ function clearSimilarity() {
   similaritySort();
 }
 $('find-similar').addEventListener('click', () => {
+  saved?.reset();
   if (!reference) viewBeforeSimilarity = $('all-images').checked;
   reference = {imageId: selectedImages[imageIndex].id, name: selectedGame.name || `Game ${selectedGame.id}`};
   imageSource($('reference-image'), reference.imageId);
@@ -360,5 +370,7 @@ $('quit').addEventListener('click', async () => {
   } catch (error) { $('sync-message').textContent = error.message; }
 });
 window.addEventListener('gallery:connected', () => { imageLists.clear(); status(); load(true); });
+window.addEventListener('gallery:saved-view', () => { $('filters').reset(); clearSimilarity(); updateSubgenres(); load(true); });
+window.addEventListener('gallery:saved', () => { if (saved?.active) load(true); });
 status();
 load();

@@ -62,7 +62,7 @@ def build(cache, output):
     for filename in ('LICENSE', 'NOTICE.md'):
         shutil.copyfile(HERE / filename, output / filename)
     assets = {'catalog.json.gz': catalogue_name}
-    for filename in ('web-core.mjs', 'search-worker.js', 'web-host.js', 'app.js', 'style.css', 'web.css'):
+    for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'app.js', 'style.css', 'web.css'):
         source = HERE / filename if filename in ('app.js', 'style.css') else HERE / 'web' / filename
         content = source.read_text(encoding='utf-8')
         for original, hashed in assets.items():
@@ -73,7 +73,7 @@ def build(cache, output):
         assets[filename] = hashed
     html = (HERE / 'index.html').read_text(encoding='utf-8')
     html = html.replace('href="/style.css"', 'href="./style.css"').replace('href="/"', 'href="./"')
-    html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
+    html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./collections.js" defer></script>\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
     html = html.replace('<section class="sync-panel"', (HERE / 'web' / 'setup.html').read_text(encoding='utf-8') + '\n    <section class="sync-panel"', 1)
     html = html.replace('<section class="sync-panel"', '<section hidden class="sync-panel"')
     html = html.replace('<section class="visual-panel"', '<section hidden class="visual-panel"')

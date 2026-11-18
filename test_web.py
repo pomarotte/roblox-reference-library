@@ -37,6 +37,10 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('blob:',html)
             self.assertNotIn('src="/',html)
             self.assertNotIn('src="./app.js"',html)
+            self.assertNotIn('src="./collections.js"',html)
+            self.assertIn('id="saved-view"',html)
+            self.assertIn('id="download-collection"',html)
+            self.assertEqual(len(list(output.glob('collections.*.js'))),1)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))
             with self.assertRaisesRegex(ValueError,'every image'):
                 build(root,output)

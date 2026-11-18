@@ -183,7 +183,7 @@
     const image = images.get(id), version = connectionVersion;
     if (!connected || !image) throw new Error('Connect your dataset folder first.');
     const request = (async () => {
-      const file = folder ? await (await folder[image.kind].getFileHandle(image.filename)).getFile() : localFiles.get(id);
+      const file = await imageFile(id);
       if (!file || !file.size || version !== connectionVersion) throw new Error('This image is no longer available. Reconnect its folder.');
       return URL.createObjectURL(file);
     })();
@@ -196,7 +196,15 @@
     }
     return request;
   }
+  async function imageFile(id) {
+    const image = images?.get(id), version = connectionVersion;
+    if (!connected || !image) throw new Error('Connect the original dataset folder to download your saved images.');
+    const file = folder ? await (await folder[image.kind].getFileHandle(image.filename)).getFile() : localFiles.get(id);
+    if (!file?.size || version !== connectionVersion) throw new Error('An image is unavailable. Reconnect the complete original dataset to export this collection.');
+    return file;
+  }
   window.galleryHost = {
+    saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),
     async api(path, {signal} = {}) {
       await ready;
       if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');

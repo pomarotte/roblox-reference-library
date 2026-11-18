@@ -73,6 +73,19 @@ SHA256SUMS.txt contains the application-download checksum.
 - Image filenames are rescanned on launch. An incomplete or incompatible source dataset is detected before
   any cached records are removed.
 
+## Favorites and collections (website)
+
+Use the heart on an image to favorite it, or **+** / **Add to collection** to save that
+individual image in one or more named collections. The sidebar switches between Explore,
+Favorites, and your collections. These lists persist in this browser, including after
+disconnecting the image folder. They do not sync across devices; clearing site data removes them.
+
+Open a collection and choose **Download ZIP** to export all its images, including icons and
+thumbnails regardless of the current filters. Reconnect the original dataset folder first.
+Original filenames are preserved inside `icons/` and `thumbs/`. Desktop browsers with a
+file-save picker stream the archive to disk; other browsers support exports up to 512 MB.
+Split collections above 4 GB or 65,535 files into smaller exports. Downloads do not modify originals.
+
 ## Find similar
 
 Open a card, choose an image, and click **Find similar**. Choose **Visual appearance**, **Game type**,

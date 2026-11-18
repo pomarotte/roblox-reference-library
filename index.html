@@ -10,6 +10,7 @@
 <body>
   <aside class="sidebar">
     <div class="brand-header"><a class="brand" href="/"><span class="brand-mark">T</span><span>Thumbnails Explorer</span></a><span class="brand-credit">By <a href="https://www.roblox.com/users/48069218/profile" target="_blank" rel="noopener noreferrer">Poom</a></span></div>
+    <nav id="saved-navigation" aria-label="Saved images" hidden><label for="saved-view">LIBRARY</label><select id="saved-view"><option value="">Explore all</option></select><button id="new-collection" class="text-button" type="button">+ New collection</button></nav>
     <form id="filters">
       <label for="search">SEARCH GAMES</label>
       <input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off">
@@ -50,6 +51,7 @@
     <div class="preview-stage"><button id="image-prev" class="image-nav" aria-label="Previous saved image" type="button">‹</button><img id="preview" alt=""><button id="image-next" class="image-nav" aria-label="Next saved image" type="button">›</button></div>
     <div class="viewer-details"><span id="viewer-visits"></span><span id="image-info"></span></div>
     <div id="filmstrip" class="filmstrip" aria-label="Saved images"></div>
+    <div id="viewer-saved-actions" hidden></div>
     <div class="viewer-actions"><div><p id="filename"></p><span id="metadata-date"></span></div><div><a id="game-page" class="secondary" target="_blank" rel="noopener noreferrer" hidden>Game page ↗</a><a id="play-game" class="secondary" target="_blank" rel="noopener noreferrer" hidden>Play ↗</a><a id="open-image" class="secondary" target="_blank" rel="noopener">Open image ↗</a><button id="reveal" class="secondary" type="button">Show in Explorer ↗</button><button id="find-similar" class="primary" type="button">Find similar ↗</button></div></div>
     <p id="viewer-error" class="error" role="alert" hidden></p>
   </dialog>
