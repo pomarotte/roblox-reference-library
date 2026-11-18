@@ -7,7 +7,8 @@
   worker.onmessage = ({data}) => {
     if ('progress' in data) {
       el('visual-message').textContent = data.progress;
-      el('visual-message').closest('section').hidden = !data.busy;
+      el('visual-message').closest('section').hidden = true;
+      if (data.busy && !el('loading').hidden && !el('similarity-panel').hidden && el('similarity-mode').value !== 'type') el('loading-message').textContent = data.progress;
       return;
     }
     const task = pending.get(data.id);

@@ -153,6 +153,12 @@ async function load(reset = false) {
   activeRequest?.abort();
   activeRequest = new AbortController();
   $('grid').setAttribute('aria-busy', 'true');
+  $('grid').replaceChildren();
+  $('empty').hidden = true;
+  $('result-count').textContent = '';
+  $('page-label').textContent = 'Loading…';
+  $('loading-message').textContent = reference ? 'Finding similar images…' : 'Loading images…';
+  $('loading').hidden = false;
   $('error').hidden = true;
   $('previous').disabled = $('next').disabled = true;
   try {
@@ -175,7 +181,10 @@ async function load(reset = false) {
     $('result-count').textContent = 'Unable to load these results';
     $('grid').replaceChildren();
   } finally {
-    if (current === generation) $('grid').setAttribute('aria-busy', 'false');
+    if (current === generation) {
+      $('grid').setAttribute('aria-busy', 'false');
+      $('loading').hidden = true;
+    }
   }
 }
 function savedDate(value) {
@@ -193,6 +202,19 @@ async function openGame(id, trigger, imageId) {
     $('viewer-title').textContent = game.name || `Game ${game.id}`;
     $('viewer-genre').textContent = `${game.genre || 'Unknown genre'} / ${game.subgenre || 'Unknown subgenre'}`;
     $('viewer-visits').textContent = game.visits === null ? 'Visits unknown' : `${format.format(game.visits)} lifetime visits`;
+    const placeId = game.root_place_id;
+    const hasGameLink = Number.isSafeInteger(placeId) && placeId > 0;
+    $('game-page').hidden = !hasGameLink && !game.name;
+    $('play-game').hidden = !hasGameLink;
+    $('game-page').textContent = hasGameLink ? 'Game page ↗' : 'Find on Roblox ↗';
+    if (hasGameLink) {
+      $('game-page').href = `https://www.roblox.com/games/${placeId}`;
+      $('play-game').href = `https://www.roblox.com/games/start?placeId=${placeId}`;
+    } else {
+      if (game.name) $('game-page').href = `https://www.roblox.com/discover/?Keyword=${encodeURIComponent(game.name)}`;
+      else $('game-page').removeAttribute('href');
+      $('play-game').removeAttribute('href');
+    }
     $('metadata-date').textContent = game.fetched_at ? `Metadata retrieved ${game.fetched_at} UTC` : 'Metadata is still being collected.';
     $('viewer-error').hidden = true;
     $('filmstrip').replaceChildren(...selectedImages.map((image, index) => {

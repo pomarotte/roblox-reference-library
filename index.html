@@ -40,6 +40,7 @@
     <div class="view-options"><label class="check-control"><input id="all-images" type="checkbox">Show every saved image</label><label class="page-size-control" for="page-size">Per page<select id="page-size"><option value="60">60</option><option value="120">120</option><option value="240" selected>240</option><option value="480">480</option></select></label></div>
     <div class="results-line"><p id="result-count" aria-live="polite">Loading games…</p><button id="refresh" class="text-button" type="button">Refresh results ↻</button></div>
     <div id="error" class="error" role="alert" hidden></div>
+    <div id="loading" class="gallery-loading" role="status" hidden><span class="loading-spinner" aria-hidden="true"></span><span id="loading-message">Loading images…</span></div>
     <section id="grid" class="grid" aria-label="Game image gallery" aria-busy="true"></section>
     <div id="empty" class="empty" hidden><span>↗</span><h3>No games in this view.</h3><p>Try a broader genre, fewer words, or a lower visit threshold.<br>Games still waiting for metadata appear when no metadata filters are applied.</p></div>
     <nav class="pagination" aria-label="Result pages"><button id="previous" class="secondary" type="button" disabled>← Previous</button><span id="page-label">Page 1</span><button id="next" class="secondary" type="button" disabled>Next →</button></nav>
@@ -49,7 +50,7 @@
     <div class="preview-stage"><button id="image-prev" class="image-nav" aria-label="Previous saved image" type="button">‹</button><img id="preview" alt=""><button id="image-next" class="image-nav" aria-label="Next saved image" type="button">›</button></div>
     <div class="viewer-details"><span id="viewer-visits"></span><span id="image-info"></span></div>
     <div id="filmstrip" class="filmstrip" aria-label="Saved images"></div>
-    <div class="viewer-actions"><div><p id="filename"></p><span id="metadata-date"></span></div><div><a id="open-image" class="secondary" target="_blank" rel="noopener">Open image ↗</a><button id="reveal" class="secondary" type="button">Show in Explorer ↗</button><button id="find-similar" class="primary" type="button">Find similar ↗</button></div></div>
+    <div class="viewer-actions"><div><p id="filename"></p><span id="metadata-date"></span></div><div><a id="game-page" class="secondary" target="_blank" rel="noopener noreferrer" hidden>Game page ↗</a><a id="play-game" class="secondary" target="_blank" rel="noopener noreferrer" hidden>Play ↗</a><a id="open-image" class="secondary" target="_blank" rel="noopener">Open image ↗</a><button id="reveal" class="secondary" type="button">Show in Explorer ↗</button><button id="find-similar" class="primary" type="button">Find similar ↗</button></div></div>
     <p id="viewer-error" class="error" role="alert" hidden></p>
   </dialog>
 </body>

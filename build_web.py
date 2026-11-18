@@ -29,8 +29,14 @@ def build(cache, output):
         games = [dict(row) for row in db.execute('SELECT id,name,genre,subgenre,visits,status,fetched_at FROM games ORDER BY id')]
         by_id = {g['id']: g for g in games}
         images = [dict(row) for row in db.execute('SELECT id,game_id,kind,filename,captured FROM images ORDER BY id')]
+    links_path = HERE / 'web' / 'game-links.json.gz'
+    links = json.loads(gzip.decompress(links_path.read_bytes()))['places'] if links_path.is_file() else {}
     for game in games:
         game['images'] = []
+        place_id = links.get(str(game['id']))
+        if place_id is not None and (type(place_id) is not int or not 0 < place_id < 2**53):
+            raise ValueError('Invalid saved game-page ID.')
+        game['root_place_id'] = place_id
     for image in images:
         by_id[image.pop('game_id')]['images'].append(image)
     with np.load(cache / 'search-index.npz', allow_pickle=False) as index:

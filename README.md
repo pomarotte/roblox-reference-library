@@ -63,6 +63,8 @@ SHA256SUMS.txt contains the application-download checksum.
 - Enable **Show every saved image** to see all images directly in the grid. Otherwise, one card
   represents each game. Open a card to browse that game's saved images of the selected type.
 - Use the arrow keys inside the preview or Show in Explorer to select the original file.
+- The browser preview includes Game page and Play links for verified Roblox place IDs.
+  When a place ID is unavailable, Find on Roblox searches by the saved game name.
 - Saved metadata and visual features are included with the portable release. When processing a
   custom collection, use Refresh results to apply newly collected information.
 - Unfinished collection resumes on the next launch. Resume metadata retries a paused collection.
