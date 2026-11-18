@@ -20,6 +20,13 @@
     el('choose-folder').disabled = !images;
     el('reconnect-folder').disabled = false;
   }
+  function folderError(error) {
+    el('folder-status').textContent = error.message;
+    if (connected) {
+      el('error').textContent = error.message;
+      el('error').hidden = false;
+    }
+  }
   worker.onmessage = ({data}) => {
     if ('progress' in data) {
       el('visual-message').textContent = data.progress;
@@ -83,9 +90,11 @@
     el('folder-title').textContent = label;
     el('folder-status').textContent = `${available.length.toLocaleString()} / ${images.size.toLocaleString()} saved images connected${available.length === images.size ? '. Ready to explore.' : '. Missing files are left out of results.'}`;
     el('choose-folder').textContent = 'Change folder';
+    el('choose-folder').className = 'text-button';
+    el('quit').before(el('choose-folder'));
     el('reconnect-folder').hidden = true;
     el('quit').disabled = false;
-    el('choose-folder').closest('section').classList.add('connected');
+    document.querySelector('.folder-panel').classList.add('connected');
     refreshed();
   }
   async function connectHandle(handle) {
@@ -128,7 +137,7 @@
       await connectHandle(handle);
     } catch (error) {
       if (error.name === 'SecurityError' || error.name === 'TypeError') el('folder-input').click();
-      else if (error.name !== 'AbortError') el('folder-status').textContent = error.message;
+      else if (error.name !== 'AbortError') folderError(error);
     }
   }
   const ready = rpc('init').then(async data => {
@@ -140,7 +149,7 @@
     remembered = await storeHandle();
     if (remembered && window.showDirectoryPicker) {
       if (await remembered.queryPermission({mode: 'read'}) === 'granted') {
-        try { await connectHandle(remembered); } catch (error) { el('folder-status').textContent = error.message; el('reconnect-folder').hidden = false; }
+        try { await connectHandle(remembered); } catch (error) { folderError(error); el('reconnect-folder').hidden = false; }
       } else el('reconnect-folder').hidden = false;
     }
     return data;
@@ -150,7 +159,7 @@
     try {
       if (await remembered.requestPermission({mode: 'read'}) !== 'granted') throw new Error('Folder access was not granted. You can choose the folder again.');
       await connectHandle(remembered);
-    } catch (error) { el('folder-status').textContent = error.message; }
+    } catch (error) { folderError(error); }
   });
   el('folder-input').addEventListener('change', async event => {
     if (!event.target.files.length) return;
@@ -165,7 +174,7 @@
       await activate([...files.keys()], event.target.files[0]?.webkitRelativePath.split('/')[0] || 'Local dataset', null, files);
       remembered = null;
       await storeHandle(null);
-    } catch (error) { el('folder-status').textContent = error.message; }
+    } catch (error) { folderError(error); }
     finally { finishDatasetLoading(); }
     event.target.value = '';
   });
@@ -211,7 +220,9 @@
         el('folder-title').textContent = 'Connect your image collection.';
         el('folder-status').textContent = 'Folder disconnected. Choose it again whenever you want to browse.';
         el('choose-folder').textContent = 'Select folder';
-        el('choose-folder').closest('section').classList.remove('connected');
+        el('choose-folder').className = 'primary';
+        document.querySelector('.folder-actions').prepend(el('choose-folder'));
+        document.querySelector('.folder-panel').classList.remove('connected');
         el('quit').disabled = true;
         refreshed();
         return {};
