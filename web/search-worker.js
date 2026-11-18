@@ -27,7 +27,7 @@ async function loadIndex() {
     if (cache) for (const request of await cache.keys()) if (!expected.has(request.url)) await cache.delete(request);
     for (const part of parts) {
       const url = new URL(part.url, self.location.href).href;
-      self.postMessage({progress: `Loading saved scene index: ${completed} / ${parts.length} parts. Images stay on your computer.`});
+      self.postMessage({progress: `Loading scene search: ${completed} / ${parts.length}`, busy: true});
       let response = await cache?.match(url);
       if (!response) response = await fetch(url);
       if (!response.ok) throw new Error('Could not download the scene index. Check your connection and retry.');
@@ -48,9 +48,8 @@ async function loadIndex() {
     }
     if (offset !== values.length) throw new Error('Incomplete scene index.');
     matrix = values;
-    self.postMessage({progress: 'Scene index loaded. Matches prioritize scene content, with colors secondary.'});
   })();
-  try { await loading; } finally { loading = null; }
+  try { await loading; } finally { loading = null; self.postMessage({progress: '', busy: false}); }
 }
 
 self.onmessage = async ({data}) => {

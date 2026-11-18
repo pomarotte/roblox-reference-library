@@ -100,8 +100,9 @@ function card(game) {
   image.loading = 'lazy';
   image.decoding = 'async';
   image.addEventListener('error', missingImage, {once: true});
-  const counter = node('span', 'image-total', game.similarity_score !== undefined ? 'Matched image' : `${game.image_count} saved`);
-  imageBox.append(image, counter);
+  const counter = node('span', 'image-total', `${game.image_count} saved`);
+  imageBox.append(image);
+  if (game.similarity_score === undefined) imageBox.append(counter);
   const meta = node('div', 'card-meta');
   const visits = game.visits === null ? 'Visits unknown' : `${compact.format(game.visits)} visits`;
   const visitLabel = node('span', '', visits);
@@ -240,6 +241,23 @@ $('range').addEventListener('change', () => {
 });
 $('sort').addEventListener('change', () => load(true));
 $('clear-filters').addEventListener('click', () => { $('filters').reset(); clearSimilarity(); updateSubgenres(); load(true); });
+document.querySelector('.brand').addEventListener('click', event => {
+  if (!window.galleryHost) return;
+  event.preventDefault();
+  $('viewer').close();
+  $('filters').reset();
+  clearSimilarity();
+  kind = 'thumbs';
+  pageSize = 240;
+  $('all-images').checked = false;
+  $('page-size').value = '240';
+  $('sort').value = 'visits';
+  $('size').value = '260';
+  document.documentElement.style.setProperty('--card-width', '260px');
+  document.querySelectorAll('[data-kind]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.kind === kind)));
+  updateSubgenres();
+  load(true);
+});
 $('all-images').addEventListener('change', () => load(true));
 $('page-size').addEventListener('change', () => { pageSize = Number($('page-size').value); load(true); });
 document.querySelectorAll('[data-kind]').forEach(button => button.addEventListener('click', () => {

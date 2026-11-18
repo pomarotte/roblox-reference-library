@@ -5,8 +5,9 @@
   const el = id => document.getElementById(id);
   let sequence = 0, catalogue, images, folder, localFiles = new Map(), remembered, connected = false, connectionVersion = 0;
   worker.onmessage = ({data}) => {
-    if (data.progress) {
+    if ('progress' in data) {
       el('visual-message').textContent = data.progress;
+      el('visual-message').closest('section').hidden = !data.busy;
       return;
     }
     const task = pending.get(data.id);

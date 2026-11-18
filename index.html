@@ -10,7 +10,6 @@
 <body>
   <aside class="sidebar">
     <a class="brand" href="/"><span class="brand-mark">R</span><span>REFERENCE LIBRARY<small>Roblox / local collection</small></span></a>
-    <div class="sidebar-intro"><span class="eyebrow">FIND YOUR NEXT DIRECTION</span><h1>A little inspiration.<br>A lot to explore.</h1></div>
     <form id="filters">
       <label for="search">SEARCH GAMES</label>
       <input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off">
@@ -30,10 +29,10 @@
       <div class="visit-inputs"><div><label for="min_visits">MORE THAN</label><input id="min_visits" type="number" min="0" step="1" placeholder="Any number of visits"></div></div>
       <button id="clear-filters" class="text-button" type="button">Reset filters <span>↺</span></button>
     </form>
-    <div class="collection"><span class="eyebrow">YOUR COLLECTION</span><strong id="collection-count">Indexing…</strong><span id="collection-games">Reading local images</span><div class="local-badge"><span></span> LOCAL FILES · NO UPLOADS</div><button id="quit" class="text-button" type="button">Stop gallery</button></div>
+    <div class="collection"><strong id="collection-count">Indexing…</strong><span id="collection-games">Reading local images</span><button id="quit" class="text-button" type="button">Stop gallery</button></div>
   </aside>
   <main>
-    <header class="page-heading"><div><span class="eyebrow">THE INSPIRATION SHELF</span><h2>Explore your collection<span>.</span></h2><p>Find the look for whatever you’re building next.</p></div><span class="edition">REFERENCE / 01</span></header>
+    <header class="page-heading"><h2>Explore your collection<span>.</span></h2></header>
     <section class="sync-panel" aria-label="Metadata collection"><div class="sync-copy"><strong id="sync-title">Connecting the dots</strong><span id="sync-message">Loading library information…</span><progress id="sync-progress" max="1" value="0" aria-label="Games with metadata"></progress></div><button id="sync-button" class="secondary" type="button">Resume metadata</button></section>
     <section class="visual-panel" aria-label="Visual indexing"><div><strong id="visual-title">Preparing visual search</strong><span id="visual-message">Loading image-index information…</span></div><progress id="visual-progress" max="1" value="0" aria-label="Images visually indexed"></progress><button id="visual-button" class="secondary" type="button">Resume visual index</button></section>
     <section id="similarity-panel" class="similarity-panel" aria-label="Similarity reference" hidden><img id="reference-image" alt="Selected similarity reference"><div class="reference-copy"><span class="eyebrow">FINDING SIMILAR TO</span><strong id="reference-name"></strong></div><label for="similarity-mode">Match by<select id="similarity-mode"><option value="both">Visual + game type</option><option value="visual">Visual appearance</option><option value="type">Game type</option></select></label><button id="clear-similarity" class="text-button" type="button">Exit similarity ×</button></section>
@@ -44,7 +43,6 @@
     <section id="grid" class="grid" aria-label="Game image gallery" aria-busy="true"></section>
     <div id="empty" class="empty" hidden><span>↗</span><h3>No games in this view.</h3><p>Try a broader genre, fewer words, or a lower visit threshold.<br>Games still waiting for metadata appear when no metadata filters are applied.</p></div>
     <nav class="pagination" aria-label="Result pages"><button id="previous" class="secondary" type="button" disabled>← Previous</button><span id="page-label">Page 1</span><button id="next" class="secondary" type="button" disabled>Next →</button></nav>
-    <footer>Hover to cycle through images. Open a card for a larger view and similar matches.<span>Visits reflect the metadata retrieval date.</span></footer>
   </main>
   <dialog id="viewer" aria-labelledby="viewer-title">
     <div class="viewer-header"><div><span class="eyebrow" id="viewer-genre"></span><h2 id="viewer-title">Game preview</h2></div><button id="close-viewer" class="close-button" aria-label="Close preview" type="button">×</button></div>

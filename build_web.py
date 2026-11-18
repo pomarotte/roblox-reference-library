@@ -69,6 +69,8 @@ def build(cache, output):
     html = html.replace('href="/style.css"', 'href="./style.css"').replace('href="/"', 'href="./"')
     html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
     html = html.replace('<section class="sync-panel"', (HERE / 'web' / 'setup.html').read_text(encoding='utf-8') + '\n    <section class="sync-panel"', 1)
+    html = html.replace('<section class="sync-panel"', '<section hidden class="sync-panel"')
+    html = html.replace('<section class="visual-panel"', '<section hidden class="visual-panel"')
     html = html.replace('>Stop gallery</button>', '>Disconnect folder</button>')
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
     html = html.replace('<body>', '<body class="web-disconnected">')
