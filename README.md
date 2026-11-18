@@ -79,10 +79,12 @@ Use the heart on an image to favorite it, or **+** / **Add to collection** to sa
 individual image in one or more named collections. The sidebar switches between Explore,
 Favorites, and your collections. These lists persist in this browser, including after
 disconnecting the image folder. They do not sync across devices; clearing site data removes them.
+After choosing a collection once, **+** adds images to the last collection you used.
+Choose **Change** in the confirmation to adjust which collections contain that image.
 
 Open a collection and choose **Download ZIP** to export all its images, including icons and
 thumbnails regardless of the current filters. Reconnect the original dataset folder first.
-Original filenames are preserved inside `icons/` and `thumbs/`. Desktop browsers with a
+Original filenames are preserved directly in the ZIP, without subfolders. Desktop browsers with a
 file-save picker stream the archive to disk; other browsers support exports up to 512 MB.
 Split collections above 4 GB or 65,535 files into smaller exports. Downloads do not modify originals.
 

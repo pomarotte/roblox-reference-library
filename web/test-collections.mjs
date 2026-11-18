@@ -15,6 +15,16 @@ store.include(collection, 2, true);
 store = createStore(storage);
 assert.deepEqual(store.data.favorites, [2]);
 assert.deepEqual(store.data.collections[0].images, [3, 2]);
+assert.equal(store.data.lastCollection, collection);
+const otherCollection = store.create('Other');
+store.include(otherCollection, 9, true);
+assert.equal(createStore(storage).data.lastCollection, otherCollection);
+store.include(otherCollection, 9, false);
+assert.equal(store.data.lastCollection, otherCollection);
+store.remove(otherCollection);
+assert.equal(createStore(storage).data.lastCollection, null);
+store.include(collection, 2, true);
+assert.equal(store.data.lastCollection, collection);
 store.favorite(2);
 store.include(collection, 3, false);
 store.rename(collection, 'Motorcycles');
@@ -31,6 +41,7 @@ assert.deepEqual(createStore(storage).data, before);
 storage.setItem = (key, value) => values.set(key, value);
 store.remove(collection);
 assert.equal(store.data.collections.length, 0);
+assert.equal(store.data.lastCollection, null);
 values.set(storageKey, '{damaged');
 assert.throws(() => createStore(storage));
 assert.equal(values.get(storageKey), '{damaged');
@@ -38,17 +49,18 @@ values.set(storageKey, JSON.stringify({version: 1, favorites: ['bad'], collectio
 assert.throws(() => createStore(storage), /left unchanged/);
 
 const binary = Uint8Array.from({length: 2048}, (_, i) => i % 256);
-const files = [{name: 'thumbs/é image.webp', file: new Blob([binary])}, {name: 'icons/another.webp', file: new Blob(['test'])}, {name: 'empty', file: new Blob([])}];
+const files = [{name: 'é image.webp', file: new Blob([binary])}, {name: 'another.webp', file: new Blob(['test'])}, {name: 'empty', file: new Blob([])}];
 const chunks = [], progress = [];
 await writeZip(files, {write: bytes => chunks.push(bytes)}, (done, total) => progress.push([done, total]));
 const zip = Buffer.from(await new Blob(chunks).arrayBuffer());
 const python = process.platform === 'win32' ? 'python' : 'python3';
 execFileSync(python, ['-c', `import io,sys,zipfile
 with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as z:
- assert z.namelist()==['thumbs/é image.webp','icons/another.webp','empty']
+ assert z.namelist()==['é image.webp','another.webp','empty']
+ assert all('/' not in name for name in z.namelist())
  assert z.testzip() is None
  assert z.read(z.namelist()[0])==bytes(range(256))*8
- assert z.read('icons/another.webp')==b'test'
+ assert z.read('another.webp')==b'test'
  assert z.read('empty')==b''
 `], {input: zip});
 assert.deepEqual(progress.at(-1), [3, 3]);

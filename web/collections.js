@@ -9,7 +9,9 @@ window.galleryCollections = (() => {
       const ids = list => Array.isArray(list) && list.every(id => Number.isSafeInteger(id) && id > 0) && new Set(list).size === list.length;
       if (value?.version !== 1 || !ids(value.favorites) || !Array.isArray(value.collections) ||
           value.collections.some(c => !c || typeof c.id !== 'string' || typeof c.name !== 'string' || !c.name.trim() || c.name.length > 80 || !ids(c.images)) ||
-          new Set(value.collections.map(c => c.id)).size !== value.collections.length) throw new Error('Saved collections could not be read. Existing browser data has been left unchanged.');
+          new Set(value.collections.map(c => c.id)).size !== value.collections.length ||
+          (value.lastCollection != null && typeof value.lastCollection !== 'string')) throw new Error('Saved collections could not be read. Existing browser data has been left unchanged.');
+      if (!value.collections.some(c => c.id === value.lastCollection)) value.lastCollection = null;
       data = value;
     }
     read();
@@ -41,12 +43,20 @@ window.galleryCollections = (() => {
       favorite(id) { edit(value => { value.favorites = toggle(value.favorites, id, !value.favorites.includes(id)); }); },
       create(label, image = null) {
         const id = crypto.randomUUID();
-        edit(value => { value.collections.push({id, name: name(label), images: image === null ? [] : toggle([], image, true)}); });
+        edit(value => {
+          value.collections.push({id, name: name(label), images: image === null ? [] : toggle([], image, true)});
+          if (image !== null) value.lastCollection = id;
+        });
         return id;
       },
       rename(id, label) { edit(value => { collection(value, id).name = name(label); }); },
-      remove(id) { edit(value => { collection(value, id); value.collections = value.collections.filter(c => c.id !== id); }); },
-      include(id, image, included) { edit(value => { const c = collection(value, id); c.images = toggle(c.images, image, included); }); }
+      remove(id) { edit(value => { collection(value, id); value.collections = value.collections.filter(c => c.id !== id); if (value.lastCollection === id) value.lastCollection = null; }); },
+      include(id, image, included) {
+        edit(value => {
+          const c = collection(value, id); c.images = toggle(c.images, image, included);
+          if (included) value.lastCollection = id;
+        });
+      }
     };
   }
 
@@ -104,7 +114,7 @@ window.galleryCollections = (() => {
 
   function initialize({getFile, getImage}) {
     const el = id => document.getElementById(id);
-    let store, view = '', pickerImage = null, editing = null, exportController;
+    let store, view = '', pickerImage = null, editing = null, exportController, lastAddedImage;
     const report = error => {
       const target = el('collection-picker').open ? el('collection-picker-error') : el('delete-collection-dialog').open ? el('delete-collection-error') : el('viewer').open ? el('viewer-error') : el('saved-error');
       target.textContent = error.message; target.hidden = false;
@@ -119,8 +129,8 @@ window.galleryCollections = (() => {
       window.dispatchEvent(new Event(previous !== view ? 'gallery:saved-view' : 'gallery:saved'));
     }
     function attempt(action) {
-      try { action(); el('saved-error').hidden = el('collection-picker-error').hidden = true; changed(); }
-      catch (error) { report(error); }
+      try { action(); el('saved-error').hidden = el('collection-picker-error').hidden = true; changed(); return true; }
+      catch (error) { report(error); return false; }
     }
     function favoriteButton(id, currentImage) {
       const button = document.createElement('button');
@@ -173,6 +183,17 @@ window.galleryCollections = (() => {
       el('collection-picker').showModal();
       el('collection-name').focus();
     }
+    function addToCollection(image) {
+      const previous = data().collections.find(c => c.id === data().lastCollection);
+      if (!previous) return openPicker(image);
+      if (!attempt(() => store.include(previous.id, image, true))) return;
+      lastAddedImage = image;
+      el('collection-toast-message').textContent = `Saved to ${previous.name}`;
+      (el('viewer').open ? el('viewer') : document.body).append(el('collection-toast'));
+      el('collection-toast').hidden = false;
+    }
+    el('change-added-collection').addEventListener('click', () => { el('collection-toast').hidden = true; openPicker(lastAddedImage); });
+    el('dismiss-collection-toast').addEventListener('click', () => { el('collection-toast').hidden = true; });
     el('saved-view').addEventListener('change', () => { view = el('saved-view').value; refresh(); window.dispatchEvent(new Event('gallery:saved-view')); });
     el('new-collection').addEventListener('click', () => openPicker());
     el('rename-collection').addEventListener('click', () => openPicker(null, view));
@@ -228,7 +249,7 @@ window.galleryCollections = (() => {
           bytes += file.size;
           // shortcut: bound memory for browsers without a streaming file picker.
           if (!writer && bytes > 512 * 1024 * 1024) throw new Error('For ZIPs over 512 MB, use desktop Chrome or Edge with the file-save picker, or split this collection.');
-          entries.push({name: `${image.kind}/${image.filename}`, file});
+          entries.push({name: image.filename, file});
           progress(entries.length, collection.images.length);
         }
         const chunks = [];
@@ -251,7 +272,7 @@ window.galleryCollections = (() => {
     el('viewer-saved-actions').append(viewerFavorite);
     const viewerCollect = document.createElement('button');
     viewerCollect.type = 'button'; viewerCollect.className = 'secondary'; viewerCollect.textContent = 'Add to collection';
-    viewerCollect.addEventListener('click', () => openPicker(Number(viewerFavorite.dataset.favoriteId)));
+    viewerCollect.addEventListener('click', () => addToCollection(Number(viewerFavorite.dataset.favoriteId)));
     el('viewer-saved-actions').append(viewerCollect);
     el('saved-navigation').hidden = el('viewer-saved-actions').hidden = false;
     refresh();
@@ -265,8 +286,8 @@ window.galleryCollections = (() => {
         const wrapper = document.createElement('article'); wrapper.className = 'card-shell';
         const actions = document.createElement('div'); actions.className = 'card-save-actions';
         const favorite = favoriteButton(game.image_id, currentImage), collect = document.createElement('button');
-        collect.type = 'button'; collect.textContent = '+'; collect.setAttribute('aria-label', 'Add image to collection');
-        collect.addEventListener('click', () => openPicker(currentImage()));
+        collect.type = 'button'; collect.className = 'add-to-collection'; collect.setAttribute('aria-label', 'Add image to collection');
+        collect.addEventListener('click', () => addToCollection(currentImage()));
         favorite.addEventListener('pointerenter', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
         favorite.addEventListener('focus', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
         actions.append(favorite, collect); wrapper.append(button, actions); return wrapper;
