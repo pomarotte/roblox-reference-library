@@ -33,6 +33,7 @@ class WebExportTests(unittest.TestCase):
             html = (output / 'index.html').read_text(encoding='utf-8')
             self.assertIn('webkitdirectory',html)
             self.assertIn('class="web-disconnected"',html)
+            self.assertIn('id="dataset-loading" class="dataset-loading" role="status" aria-live="polite" hidden',html)
             self.assertIn('blob:',html)
             self.assertNotIn('src="/',html)
             self.assertNotIn('src="./app.js"',html)
