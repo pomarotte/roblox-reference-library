@@ -100,6 +100,17 @@ jobs:
         with:
           name: github-pages-${{ github.run_attempt }}
           path: .web-build
+      - name: Wait for the Pages artifact to become visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in {1..12}; do
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages-$GITHUB_RUN_ATTEMPT" --jq '.total_count')
+            if [[ "$count" == 1 ]]; then exit 0; fi
+            sleep 5
+          done
+          echo 'Pages artifact is still unavailable.'
+          exit 1
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
