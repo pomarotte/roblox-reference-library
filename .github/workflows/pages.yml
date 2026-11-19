@@ -68,8 +68,15 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/daily.zip"
             unzip "$RUNNER_TEMP/daily.zip" -d "$RUNNER_TEMP/daily"
           fi
-      - name: Install daily indexing dependencies
+      - name: Select capture or rebuild
+        id: scan
         if: steps.daily.outputs.enabled == 'true'
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push && -f "$RUNNER_TEMP/daily/dataset.sqlite3" ]]; then
+            echo 'rebuild=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install daily indexing dependencies
+        if: steps.daily.outputs.enabled == 'true' && steps.scan.outputs.rebuild != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq rclone
@@ -86,9 +93,15 @@ jobs:
           RCLONE_CONFIG_CLOUD_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           RCLONE_CONFIG_CLOUD_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           HF_HUB_DISABLE_XET: '1'
-        run: python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud
+        run: |
+          args=()
+          if [[ '${{ steps.scan.outputs.rebuild }}' == true ]]; then
+            day=$(python -c 'import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute("SELECT MAX(observed_date) FROM observations").fetchone()[0])' "$RUNNER_TEMP/daily/dataset.sqlite3")
+            args+=(--rebuild-day "$day")
+          fi
+          python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud "${args[@]}"
       - name: Save the daily checkpoint
-        if: steps.daily.outputs.enabled == 'true'
+        if: steps.daily.outputs.enabled == 'true' && steps.scan.outputs.rebuild != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: daily-index-state
@@ -115,4 +128,3 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
-

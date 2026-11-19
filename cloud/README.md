@@ -16,7 +16,10 @@ The job runs on GitHub. The historical gallery is available before credentials a
 The job checks named public Roblox charts, uploads new image bytes under content-addressed
 `daily/` keys, and embeds each new file once with the historical CLIP model. It preserves
 historical image IDs and stores daily game-image associations separately, including shared images.
-Use Latest daily scan to browse the most recent observations and switch it off to search the archive.
+The View menu shows new images for existing games, games added for the first time, or the full archive.
+The daily views use the latest successful scan. Byte-for-byte duplicates of historical images are
+excluded from the new images view. Scheduled and manual runs collect new captures, while code
+pushes rebuild the site using the saved scan when a checkpoint is available.
 The SQLite checkpoint contains public Roblox metadata and feature vectors, and the workflow stores
 it as a GitHub Actions artifact for up to 90 days. Regular successful runs refresh it.
 

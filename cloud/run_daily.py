@@ -141,15 +141,17 @@ def prepare_assets(state, rclone, encode=encode_images):
             file.unlink()
 
 
-def merge_daily(database, day, games, images, scenes, palettes):
+def merge_daily(database, day, games, images, scenes, palettes, historical_images):
     day = date.fromisoformat(day).isoformat()
     game_map = {game['id']: game for game in games}
+    historical_games = set(game_map)
     used_ids = {image['id'] for image in images}
     additions = []
     with closing(sqlite3.connect(database)) as db:
         db.row_factory = sqlite3.Row
         rows = db.execute('''SELECT gi.*, g.name,g.visits,g.root_place_id,m.genre,m.subgenre,
                    i.object_key,i.scene,i.palette,
+                   MIN(gi.first_seen) OVER (PARTITION BY gi.universe_id) AS game_first_seen,
                    EXISTS(SELECT 1 FROM observations o WHERE o.observed_date=? AND
                      o.universe_id=gi.universe_id AND o.kind=gi.kind AND o.sha256=gi.sha256) AS latest
             FROM game_images gi JOIN games g USING(universe_id)
@@ -175,10 +177,16 @@ def merge_daily(database, day, games, images, scenes, palettes):
             if image_id in used_ids:
                 raise ValueError('Daily image ID collision.')
             used_ids.add(image_id)
+            category = None
+            if row['latest'] and row['first_seen'] == day:
+                if uid not in historical_games and row['game_first_seen'] == day:
+                    category = 'new-games'
+                elif (uid, kind, digest) not in historical_images:
+                    category = 'new-images'
             image = dict(id=image_id, kind={'icon': 'icons', 'thumbnail': 'thumbs'}[kind],
                          filename=f'{uid}_{kind}_{digest}{Path(row["object_key"]).suffix}',
-                         captured=row['last_seen'].replace('-', '') + '_000000',
-                         object_key=row['object_key'], daily_latest=bool(row['latest']))
+                         captured=row['first_seen'].replace('-', '') + '_000000',
+                         object_key=row['object_key'], daily_category=category)
             game['images'].append(image)
             additions.append((image, row['scene'], row['palette']))
     additions.sort(key=lambda item: item[0]['id'])
@@ -192,9 +200,15 @@ def merge_daily(database, day, games, images, scenes, palettes):
 def publish(output, database, day, cache):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect((cache / 'library.sqlite3').resolve().as_uri() + '?mode=ro', uri=True)) as archive:
+        historical_images = set(archive.execute("""
+            SELECT i.game_id, CASE i.kind WHEN 'icons' THEN 'icon' ELSE 'thumbnail' END, v.hash
+            FROM images i JOIN image_vectors v ON v.image_id=i.id
+            WHERE v.hash IS NOT NULL
+        """))
     with tempfile.TemporaryDirectory(dir=output.parent) as stage:
         stage = Path(stage)
-        build_cloud(stage, extend=lambda *data: merge_daily(database, day, *data), cache=cache)
+        build_cloud(stage, extend=lambda *data: merge_daily(database, day, *data, historical_images), cache=cache)
         for asset in stage.iterdir():
             if asset.is_dir():
                 shutil.copytree(asset, output / asset.name, dirs_exist_ok=True)

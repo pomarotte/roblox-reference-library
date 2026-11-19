@@ -51,6 +51,7 @@ export function sceneScore(matrix, candidate, seed, dimensions = 560) {
 
 export function queryLibrary(state, params, available, matrix = null) {
   const kind = params.get('kind') || 'thumbs', mode = params.get('similarity') || '';
+  const dailyCategory = params.get('daily_category');
   const seed = mode ? state.images.get(Number(params.get('seed_image'))) : null;
   if (!['icons', 'thumbs'].includes(kind)) throw new Error('Invalid image type.');
   if (!['', 'visual', 'both', 'type'].includes(mode)) throw new Error('Invalid similarity mode.');
@@ -58,7 +59,7 @@ export function queryLibrary(state, params, available, matrix = null) {
   if (['both', 'type'].includes(mode) && (!seed.game.genre || seed.game.genre === 'Unknown')) throw new Error('Choose Visual appearance: this game has no genre metadata.');
   const visual = mode === 'visual' || mode === 'both';
   if (visual && !matrix) throw new Error('Load the saved scene index first.');
-  const allImages = visual || params.get('all_images') === '1';
+  const allImages = visual || dailyCategory === 'new-images' || params.get('all_images') === '1';
   let selectedIds = null;
   if (params.has('saved_ids')) {
     const ids = JSON.parse(params.get('saved_ids'));
@@ -83,7 +84,8 @@ export function queryLibrary(state, params, available, matrix = null) {
     if (search && !(game.name || '').toLowerCase().includes(search) && String(game.id) !== search) continue;
     if (minimum !== null && (game.visits === null || game.visits < minimum)) continue;
     if (maximum !== null && (game.visits === null || game.visits > maximum)) continue;
-    const saved = game.images.filter(image => image.kind === kind && available.has(image.id) && (!selectedIds || selectedIds.has(image.id)) && (!params.has('daily_only') || image.daily_latest));
+    const saved = game.images.filter(image => image.kind === kind && available.has(image.id) &&
+      (!selectedIds || selectedIds.has(image.id)) && (!dailyCategory || image.daily_category === dailyCategory));
     for (const image of allImages ? saved : saved.slice(0, 1)) {
       const item = {id: game.id, name: game.name, genre: game.genre, subgenre: game.subgenre, visits: game.visits, status: game.status, image_count: saved.length, image_id: image.id, captured: image.captured};
       if (visual) item.score = sceneScore(matrix, state.images.get(image.id).vectorIndex, seed.vectorIndex);

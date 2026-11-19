@@ -33,16 +33,15 @@ def build_cloud(output, extend=None, cache=GALLERY):
     html = html.replace('<button id="quit"', '<button hidden id="quit"')
     html = html.replace("img-src 'self' blob:", "img-src 'self' blob: https://rolibrary.win")
     html = html.replace("connect-src 'self'", "connect-src 'self' https://rolibrary.win")
+    html = html.replace('Choose your dataset folder above to show its saved images.', '')
     if extend:
-        app_name = re.search(r'(?<=src="\./)app\.[a-f0-9]+\.js', html).group()
-        app = (output / app_name).read_text(encoding='utf-8')
-        app = app.replace("function parameters() {", "function parameters() {\n  const daily = $('daily-only').checked && !reference && !saved?.active;")
-        app = app.replace("params.set('all_images',", "if (daily) { params.set('daily_only', '1'); params.set('sort', 'recent'); }\n  params.set('all_images',", 1)
-        app = app.replace("status();\nload();", "$('daily-only').addEventListener('change', () => load(true));\nstatus();\nload();")
-        daily_app = f'app.{sha256(app.encode()).hexdigest()[:12]}.js'
-        (output / daily_app).write_text(app, encoding='utf-8')
-        html = html.replace(app_name, daily_app)
-        html = html.replace('<div class="toolbar-options">', '<div class="toolbar-options"><label class="check-control"><input id="daily-only" type="checkbox" checked>Latest daily scan</label>')
+        html = html.replace('<div class="toolbar-options">', '<div class="toolbar-options">'
+            '<label class="sort-control daily-view">View<select id="daily-category">'
+            '<option value="new-images">New images for existing games</option>'
+            '<option value="new-games">Newly indexed games</option>'
+            '<option value="">Full archive</option></select></label>')
+        (output / 'daily.css').write_text('.daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
+        html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')
 
 

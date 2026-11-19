@@ -73,9 +73,17 @@ async function status() {
     if (!window.galleryHost) statusTimer = setTimeout(status, 5000);
   }
 }
+function dailyCategory() {
+  return !reference && !saved?.active ? $('daily-category')?.value : '';
+}
 function parameters() {
   const params = new URLSearchParams({kind, offset: page * pageSize, limit: pageSize, sort: $('sort').value});
   params.set('all_images', $('all-images').checked ? '1' : '0');
+  const daily = dailyCategory();
+  if (daily) {
+    params.set('daily_category', daily);
+    if (daily === 'new-images') params.set('all_images', '1');
+  }
   if (saved?.active) {
     params.set('saved_ids', JSON.stringify(saved.ids));
     params.set('all_images', '1');
@@ -119,7 +127,7 @@ function card(game) {
   const root = saved ? saved.card(button, game, () => displayedImageId) : button;
   async function cycle() {
     stopHover();
-    if (game.similarity_score !== undefined || saved?.active) return;
+    if (game.similarity_score !== undefined || saved?.active || dailyCategory() === 'new-images') return;
     if (game.image_count < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const token = ++hoverGeneration;
     let timer;
@@ -156,6 +164,7 @@ function card(game) {
 async function load(reset = false) {
   stopHover();
   $('explore-title').textContent = saved?.title || (kind === 'icons' ? 'Explore Icons' : 'Explore Thumbnails');
+  if ($('daily-category')) $('all-images').closest('label').hidden = dailyCategory() === 'new-images';
   if (reset) { page = 0; window.scrollTo({top: 0}); }
   const current = ++generation;
   activeRequest?.abort();
@@ -176,7 +185,11 @@ async function load(reset = false) {
     $('grid').classList.toggle('icons', kind === 'icons');
     $('grid').replaceChildren(...data.items.map(card));
     $('empty').hidden = total !== 0;
-    const unit = saved?.active || $('all-images').checked ? 'images' : 'games';
+    const unit = saved?.active || $('all-images').checked || dailyCategory() === 'new-images' ? 'images' : 'games';
+    if ($('daily-category')) {
+      $('empty').querySelector('h3').textContent = dailyCategory() === 'new-games' ? 'No matching games added in the latest scan.'
+        : dailyCategory() === 'new-images' ? 'No matching new images in the latest scan.' : 'No games in this view.';
+    }
     const prefix = reference && $('similarity-mode').value !== 'type' ? 'Closest ' : '';
     $('result-count').textContent = total ? `${prefix}${format.format(total)} ${unit} · Showing ${format.format(page * pageSize + 1)}–${format.format(page * pageSize + data.items.length)}` : `0 matching ${unit}`;
     $('page-label').textContent = `Page ${page + 1} of ${Math.max(1, Math.ceil(total / pageSize))}`;
@@ -372,5 +385,6 @@ $('quit').addEventListener('click', async () => {
 window.addEventListener('gallery:connected', () => { imageLists.clear(); status(); load(true); });
 window.addEventListener('gallery:saved-view', () => { $('filters').reset(); clearSimilarity(); updateSubgenres(); load(true); });
 window.addEventListener('gallery:saved', () => { if (saved?.active) load(true); });
+$('daily-category')?.addEventListener('change', () => load(true));
 status();
 load();
