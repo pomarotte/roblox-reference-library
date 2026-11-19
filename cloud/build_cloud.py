@@ -37,9 +37,9 @@ def build_cloud(output, extend=None, cache=GALLERY):
     if extend:
         html = html.replace('<div class="toolbar-options">', '<div class="toolbar-options">'
             '<label class="sort-control daily-view">View<select id="daily-category">'
+            '<option value="" selected>Full archive</option>'
             '<option value="new-images">New images for existing games</option>'
-            '<option value="new-games">Newly indexed games</option>'
-            '<option value="">Full archive</option></select></label>')
+            '<option value="new-games">Newly indexed games</option></select></label>')
         (output / 'daily.css').write_text('.daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
         html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')

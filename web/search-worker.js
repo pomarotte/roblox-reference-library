@@ -23,13 +23,16 @@ async function loadIndex() {
     let offset = 0, completed = 0;
     let cache;
     try { cache = await caches.open('roblox-scenes-v1'); } catch (_) { /* Browser storage can be disabled. */ }
-    const expected = new Set(parts.map(part => new URL(part.url, self.location.href).href));
-    if (cache) for (const request of await cache.keys()) if (!expected.has(request.url)) await cache.delete(request);
-    for (const part of parts) {
-      const url = new URL(part.url, self.location.href).href;
-      self.postMessage({progress: `Loading scene search: ${completed} / ${parts.length}`, busy: true});
-      let response = await cache?.match(url);
-      if (!response) response = await fetch(url);
+    const sections = parts.map(part => {
+      const start = offset;
+      offset += part.rows * dimensions;
+      return {part, start, url: new URL(part.url, self.location.href).href};
+    });
+    if (offset !== values.length) throw new Error('Incomplete scene index.');
+    const progress = () => self.postMessage({progress: `Loading scene search: ${completed} / ${parts.length}`, busy: true});
+    async function loadPart({part, start, url}) {
+      const cached = await cache?.match(url);
+      const response = cached || await fetch(url);
       if (!response.ok) throw new Error('Could not download the scene index. Check your connection and retry.');
       const compressed = await response.arrayBuffer();
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', compressed)), n => n.toString(16).padStart(2, '0')).join('');
@@ -37,17 +40,31 @@ async function loadIndex() {
         await cache?.delete(url);
         throw new Error('A search-index download is damaged. Please retry.');
       }
-      if (cache) {
-        try { await cache.put(url, new Response(compressed)); } catch (_) { /* Searching still works when storage is full. */ }
-      }
       const bytes = await gunzip(new Response(compressed));
       if (bytes.byteLength !== part.rows * dimensions * 2) throw new Error('Incorrect search-index size.');
-      values.set(decodeHalf(bytes), offset);
-      offset += part.rows * dimensions;
+      values.set(decodeHalf(bytes), start);
+      if (cache && !cached) {
+        try { await cache.put(url, new Response(compressed)); } catch (_) { /* Searching still works when storage is full. */ }
+      }
       completed++;
+      progress();
     }
-    if (offset !== values.length) throw new Error('Incomplete scene index.');
+    progress();
+    for (let start = 0; start < sections.length; start += 4) {
+      const results = await Promise.allSettled(sections.slice(start, start + 4).map(loadPart));
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+    }
     matrix = values;
+    if (cache) {
+      const directory = new URL('./data/', self.location.href).href;
+      const expected = new Set(sections.map(section => section.url));
+      try {
+        for (const request of await cache.keys()) {
+          if (request.url.startsWith(directory) && !expected.has(request.url)) await cache.delete(request);
+        }
+      } catch (_) { /* Cached index maintenance is optional. */ }
+    }
   })();
   try { await loading; } finally { loading = null; self.postMessage({progress: '', busy: false}); }
 }

@@ -292,6 +292,7 @@ document.querySelector('.brand').addEventListener('click', event => {
   event.preventDefault();
   $('viewer').close();
   $('filters').reset();
+  if ($('daily-category')) $('daily-category').value = '';
   saved?.reset();
   clearSimilarity();
   kind = 'thumbs';
