@@ -83,7 +83,7 @@ export function queryLibrary(state, params, available, matrix = null) {
     if (search && !(game.name || '').toLowerCase().includes(search) && String(game.id) !== search) continue;
     if (minimum !== null && (game.visits === null || game.visits < minimum)) continue;
     if (maximum !== null && (game.visits === null || game.visits > maximum)) continue;
-    const saved = game.images.filter(image => image.kind === kind && available.has(image.id) && (!selectedIds || selectedIds.has(image.id)));
+    const saved = game.images.filter(image => image.kind === kind && available.has(image.id) && (!selectedIds || selectedIds.has(image.id)) && (!params.has('daily_only') || image.daily_latest));
     for (const image of allImages ? saved : saved.slice(0, 1)) {
       const item = {id: game.id, name: game.name, genre: game.genre, subgenre: game.subgenre, visits: game.visits, status: game.status, image_count: saved.length, image_id: image.id, captured: image.captured};
       if (visual) item.score = sceneScore(matrix, state.images.get(image.id).vectorIndex, seed.vectorIndex);

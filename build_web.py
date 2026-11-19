@@ -1,6 +1,6 @@
 """Export the saved collection as a static, browser-only gallery. Never reads images."""
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import gzip
 import hashlib
 import json
@@ -16,7 +16,7 @@ RELEASE_URL = 'https://github.com/pomarotte/roblox-reference-library/releases/do
 RELEASE_SHA256 = '0304116829f096926f3c8dad65d04412c9dd758ef08a837ceec3a793c60eb95d'
 
 
-def build(cache, output):
+def build(cache, output, extend=None):
     import numpy as np
     cache, output = Path(cache), Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -46,6 +46,10 @@ def build(cache, output):
         scenes, palettes = index['scenes'], index['palettes']
         if scenes.shape != (len(images), 512) or palettes.shape != (len(images), 48):
             raise ValueError('Unexpected visual feature dimensions.')
+        if extend:
+            scenes, palettes = extend(games, images, scenes, palettes)
+            if len(scenes) != len(images) or len(palettes) != len(images):
+                raise ValueError('Daily images and visual features do not align.')
         parts = []
         for start in range(0, len(images), 8192):
             block = np.concatenate((scenes[start:start + 8192], palettes[start:start + 8192]), axis=1)
@@ -89,7 +93,8 @@ def build(cache, output):
     print(f'Built {len(games):,} games / {len(images):,} images. No image files copied. Visual download: {sum(p["bytes"] for p in parts) / 1048576:.1f} MiB.')
 
 
-def from_release(output):
+@contextmanager
+def release_cache():
     with tempfile.TemporaryDirectory() as folder:
         cache = Path(folder)
         archive = cache / 'app.zip'
@@ -104,6 +109,11 @@ def from_release(output):
             for name in ('library.sqlite3', 'search-index.npz'):
                 with saved.open(name) as source, (cache / name).open('wb') as target:
                     shutil.copyfileobj(source, target)
+        yield cache
+
+
+def from_release(output):
+    with release_cache() as cache:
         build(cache, output)
 
 
