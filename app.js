@@ -95,6 +95,9 @@ function parameters() {
   for (const id of ['search', 'genre', 'subgenre', 'min_visits', 'max_visits']) {
     if ($(id).value) params.set(id, $(id).value);
   }
+  for (const id of ['first_from', 'first_to']) {
+    if ($(id)?.value) params.set(id, $(id).value);
+  }
   return params;
 }
 function missingImage(event) {
@@ -279,6 +282,7 @@ for (const id of ['search', 'min_visits', 'max_visits']) $(id).addEventListener(
 });
 $('genre').addEventListener('change', () => { $('subgenre').value = ''; updateSubgenres(); load(true); });
 $('subgenre').addEventListener('change', () => load(true));
+for (const id of ['first_from', 'first_to']) $(id)?.addEventListener('change', () => load(true));
 $('range').addEventListener('change', () => {
   const [minimum = '', maximum = ''] = $('range').value.split(':');
   $('min_visits').value = minimum;

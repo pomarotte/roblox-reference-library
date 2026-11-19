@@ -34,6 +34,7 @@ def build_cloud(output, extend=None, cache=GALLERY):
     html = html.replace("img-src 'self' blob:", "img-src 'self' blob: https://rolibrary.win")
     html = html.replace("connect-src 'self'", "connect-src 'self' https://rolibrary.win")
     html = html.replace('Choose your dataset folder above to show its saved images.', '')
+    html = html.replace('<button id="clear-filters"', '<label>FIRST SAVED THUMBNAIL</label><div class="visit-inputs"><div><label for="first_from">FROM</label><input id="first_from" type="date"></div><div><label for="first_to">TO</label><input id="first_to" type="date"></div></div><button id="clear-filters"')
     if extend:
         html = html.replace('<div class="toolbar-options">', '<div class="toolbar-options">'
             '<label class="sort-control daily-view">View<select id="daily-category">'

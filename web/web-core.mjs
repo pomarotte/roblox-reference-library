@@ -76,7 +76,14 @@ export function queryLibrary(state, params, available, matrix = null) {
   const minimum = visitBound('min_visits'), maximum = visitBound('max_visits');
   if (minimum !== null && maximum !== null && minimum > maximum) throw new Error('Minimum visits must not exceed maximum visits.');
   const results = [];
+  const firstFrom = (params.get('first_from') || '').replaceAll('-', '');
+  const firstTo = (params.get('first_to') || '').replaceAll('-', '');
+  if ((firstFrom && !/^\d{8}$/.test(firstFrom)) || (firstTo && !/^\d{8}$/.test(firstTo)) || (firstFrom && firstTo && firstFrom > firstTo)) throw new Error('Enter a valid date range.');
   for (const game of state.games.values()) {
+    if (firstFrom || firstTo) {
+      const first = game.images.filter(image => image.kind === 'thumbs' && /^\d{8}/.test(image.captured)).map(image => image.captured.slice(0, 8)).sort()[0];
+      if (!first || (firstFrom && first < firstFrom) || (firstTo && first > firstTo)) continue;
+    }
     if (seed && game.id === seed.game.id) continue;
     if (['both', 'type'].includes(mode) && (game.genre !== seed.game.genre || (seed.game.subgenre && seed.game.subgenre !== 'Unknown' && game.subgenre !== seed.game.subgenre))) continue;
     if (params.get('genre') && (game.genre || 'Unknown') !== params.get('genre')) continue;
