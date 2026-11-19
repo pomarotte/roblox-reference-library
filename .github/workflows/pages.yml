@@ -37,7 +37,7 @@ jobs:
           sys.path.insert(0, 'cloud')
           from build_cloud import build_cloud
           with release_cache() as cache:
-              build(cache, Path('.web-build'))
+              build(cache, Path('.web-build/local'))
               build_cloud(Path('.web-build/cloud'), cache=cache)
               import shutil
               for name in ('library.sqlite3', 'search-index.npz'):
@@ -108,6 +108,17 @@ jobs:
           path: ${{ runner.temp }}/daily/dataset.sqlite3
           retention-days: 90
           overwrite: true
+      - name: Set up gallery routes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root = Path('.web-build')
+          cloud = root / 'cloud'
+          for item in cloud.iterdir():
+              shutil.move(str(item), str(root / item.name))
+          (cloud / 'index.html').write_text('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=../"><a href="../">Open gallery</a>', encoding='utf-8')
+          PY
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
