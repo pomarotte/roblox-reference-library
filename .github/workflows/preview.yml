@@ -1,0 +1,14 @@
+name: Publish preview
+on:
+  push:
+    branches: [preview]
+permissions:
+  actions: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start Pages build from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
