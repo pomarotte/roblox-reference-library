@@ -1,7 +1,7 @@
 name: Publish browser gallery
 on:
   push:
-    branches: [main]
+    branches: [main, preview]
   schedule:
     - cron: '47 13 * * *'
   workflow_dispatch:
@@ -21,6 +21,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/checkout@v6
+        with:
+          ref: preview
+          path: .preview-source
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -31,6 +37,7 @@ jobs:
         run: |
           python - <<'PY'
           import sys
+          import subprocess
           from pathlib import Path
           from build_web import build, release_cache
           sys.path.insert(0, 'cloud')
@@ -38,6 +45,9 @@ jobs:
           with release_cache() as cache:
               build(cache, Path('.web-build/local'))
               build_cloud(Path('.web-build/cloud'), cache=cache)
+              subprocess.run([sys.executable, '-c',
+                  'import sys; from pathlib import Path; sys.path.insert(0, "cloud"); from build_cloud import build_cloud; build_cloud(Path(sys.argv[1]), cache=Path(sys.argv[2]))',
+                  str(Path('.web-build/preview').resolve()), str(cache.resolve())], cwd='.preview-source', check=True)
               import shutil
               for name in ('library.sqlite3', 'search-index.npz'):
                   shutil.move(cache / name, Path('${{ runner.temp }}') / name)
@@ -138,3 +148,4 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
+
