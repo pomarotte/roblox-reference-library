@@ -66,7 +66,7 @@ def application():
     if not (PORTABLE / 'runtime' / 'python.exe').is_file():
         raise ValueError('Run build_release.py runtime first.')
     PORTABLE.mkdir(parents=True, exist_ok=True)
-    sources = ['app.py', 'visual.py', 'app.js', 'index.html', 'style.css', 'logo.svg', 'rolibrary.svg', 'setup_dataset.py',
+    sources = ['app.py', 'visual.py', 'app.js', 'index.html', 'style.css', 'logo.svg', 'rolibrary.svg', 'blacklogo.svg', 'setup_dataset.py',
                'Start Gallery.cmd', 'START HERE.txt', 'README.md', 'LICENSE', 'NOTICE.md',
                'requirements-visual.txt', 'build_release.py', 'test_app.py', 'test_release.py']
     for name in sources:

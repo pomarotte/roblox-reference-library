@@ -332,7 +332,7 @@ def make_handler(library):
                 if re.fullmatch(r'/image/\d+', url.path):
                     path = library.image_path(int(url.path.rsplit('/', 1)[1]))
                     return self.send(200, path.read_bytes(), 'image/webp', 'private, max-age=3600')
-                assets = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/logo.svg': 'logo.svg', '/rolibrary.svg': 'rolibrary.svg'}
+                assets = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/logo.svg': 'logo.svg', '/rolibrary.svg': 'rolibrary.svg', '/blacklogo.svg': 'blacklogo.svg'}
                 if url.path in assets:
                     path = HERE / assets[url.path]
                     return self.send(200, path.read_bytes(), mimetypes.guess_type(path)[0] or 'text/plain')
