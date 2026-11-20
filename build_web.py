@@ -63,7 +63,7 @@ def build(cache, output, extend=None):
     compressed_catalogue = gzip.compress(raw, mtime=0)
     catalogue_name = f'catalog.{hashlib.sha256(compressed_catalogue).hexdigest()[:12]}.json.gz'
     (data_dir / catalogue_name).write_bytes(compressed_catalogue)
-    for filename in ('LICENSE', 'NOTICE.md'):
+    for filename in ('LICENSE', 'NOTICE.md', 'logo.svg', 'rolibrary.svg'):
         shutil.copyfile(HERE / filename, output / filename)
     assets = {'catalog.json.gz': catalogue_name}
     for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'app.js', 'style.css', 'web.css'):

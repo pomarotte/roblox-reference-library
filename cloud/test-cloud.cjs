@@ -22,6 +22,8 @@ vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
   const status = await window.galleryHost.api('/api/status');
   assert.equal(status.games, 1);
   assert.equal(status.images, 3);
+  assert.equal(status.thumbnails, 2);
+  assert.equal(status.icons, 1);
   assert.match(lastUpdated.textContent, /Nov 19, 2026, 6:32/);
   assert.equal(lastUpdated.hidden, false);
   const image = {tagName: 'IMG'};
@@ -34,3 +36,4 @@ vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
   assert.equal((await window.galleryHost.api('/api/library?kind=thumbs')).total, 1);
   console.log('Cloud catalogue initialization, image URLs, collection fetch, and search routing passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
+

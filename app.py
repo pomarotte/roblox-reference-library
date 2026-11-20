@@ -114,6 +114,8 @@ class Library:
             row = dict(db.execute('''SELECT COUNT(*) games, COALESCE(SUM(image_count),0) images,
                 COALESCE(SUM(status='ready'),0) ready, COALESCE(SUM(status='pending'),0) pending,
                 COALESCE(SUM(status='unavailable'),0) unavailable FROM games''').fetchone())
+            counts = dict(db.execute('SELECT kind, COUNT(*) FROM images GROUP BY kind'))
+            row.update(thumbnails=counts.get('thumbs', 0), icons=counts.get('icons', 0))
             row['facets'] = [dict(r) for r in db.execute('SELECT DISTINCT genre,subgenre FROM games WHERE status=\'ready\' ORDER BY genre,subgenre')]
         return {**row, **self.state, 'source': str(self.source), 'application': 'roblox-reference-library', 'visual': self.visual.status()}
 
@@ -330,7 +332,7 @@ def make_handler(library):
                 if re.fullmatch(r'/image/\d+', url.path):
                     path = library.image_path(int(url.path.rsplit('/', 1)[1]))
                     return self.send(200, path.read_bytes(), 'image/webp', 'private, max-age=3600')
-                assets = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css'}
+                assets = {'/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/logo.svg': 'logo.svg', '/rolibrary.svg': 'rolibrary.svg'}
                 if url.path in assets:
                     path = HERE / assets[url.path]
                     return self.send(200, path.read_bytes(), mimetypes.guess_type(path)[0] or 'text/plain')
@@ -416,3 +418,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
