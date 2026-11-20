@@ -2,7 +2,6 @@ name: Publish browser gallery
 on:
   push:
     branches: [main]
-    paths: ['web/**', 'cloud/**', 'build_web.py', 'app.js', 'index.html', 'style.css', '.github/workflows/pages.yml']
   schedule:
     - cron: '47 13 * * *'
   workflow_dispatch:

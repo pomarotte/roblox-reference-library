@@ -1,5 +1,6 @@
 """Build a separate cloud-image preview using the existing saved catalogue."""
 from pathlib import Path
+import os
 import re
 import sys
 from hashlib import sha256
@@ -31,7 +32,11 @@ def build_cloud(output, extend=None, cache=GALLERY):
     html = html.replace('<body class="web-disconnected">', '<body>')
     html = html.replace('<section class="folder-panel"', '<section hidden class="folder-panel"')
     html = html.replace('<button id="quit"', '<button hidden id="quit"')
-    html = html.replace('<span id="collection-games">Reading local images</span>', '<span id="collection-games">Reading local images</span><span id="last-updated" hidden></span>')
+    commit = os.environ.get('GITHUB_SHA', '')
+    version = f'Site version {commit[:12]}' if re.fullmatch(r'[0-9a-f]{40}', commit) else 'Site version: local build'
+    html = html.replace('<span id="collection-games">Reading local images</span>',
+                        '<span id="collection-games">Reading local images</span><span id="last-updated" hidden></span>'
+                        f'<span id="site-version">{version}</span>')
     html = html.replace("img-src 'self' blob:", "img-src 'self' blob: https://rolibrary.win")
     html = html.replace("connect-src 'self'", "connect-src 'self' https://rolibrary.win")
     html = html.replace('Choose your dataset folder above to show its saved images.', '')

@@ -5,9 +5,11 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from build_web import build
+from cloud.build_cloud import build_cloud
 
 
 class WebExportTests(unittest.TestCase):
@@ -41,6 +43,12 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('id="saved-view"',html)
             self.assertIn('id="download-collection"',html)
             self.assertEqual(len(list(output.glob('collections.*.js'))),1)
+            cloud_output = root / 'cloud'
+            for commit in ('1' * 40, '2' * 40):
+                with patch.dict('os.environ', GITHUB_SHA=commit):
+                    build_cloud(cloud_output, cache=root)
+                cloud_html = (cloud_output / 'index.html').read_text(encoding='utf-8')
+                self.assertIn(f'id="last-updated" hidden></span><span id="site-version">Site version {commit[:12]}</span>', cloud_html)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))
             with self.assertRaisesRegex(ValueError,'every image'):
                 build(root,output)
