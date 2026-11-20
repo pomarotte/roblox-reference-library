@@ -290,6 +290,7 @@ window.galleryCollections = (() => {
       get ids() { return active()?.images || []; },
       get title() { return active()?.name; },
       reset() { view = ''; refresh(); },
+      select(id) { view = id; refresh(); },
       showImage(id) { viewerFavorite.dataset.favoriteId = id; updateFavorite(viewerFavorite, id); },
       card(button, game, currentImage) {
         const wrapper = document.createElement('article'); wrapper.className = 'card-shell';

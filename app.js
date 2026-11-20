@@ -327,27 +327,31 @@ $('visual-button').addEventListener('click', async () => {
   try { await api('/api/visual-start', {method: 'POST'}); await status(); }
   catch (error) { $('visual-message').textContent = error.message; $('visual-button').disabled = false; }
 });
+function saveViewBeforeSimilarity() {
+  const ids = ['search', 'genre', 'range', 'min_visits', 'max_visits', 'first_from', 'first_to', 'daily-category', 'sort', 'page-size'];
+  viewBeforeSimilarity = {kind, page, pageSize, scrollY: window.scrollY, allImages: $('all-images').checked,
+    savedView: $('saved-view')?.value || '', subgenre: $('subgenre').value,
+    values: Object.fromEntries(ids.filter(id => $(id)).map(id => [id, $(id).value]))};
+}
 function similaritySort() {
   const visual = reference && $('similarity-mode').value !== 'type';
   $('all-images').disabled = Boolean(visual || saved?.active);
   if (visual || saved?.active) $('all-images').checked = true;
-  $('sort').disabled = Boolean(visual);
-  $('sort').options[0].textContent = visual ? 'Best visual match' : 'Most visits';
-  if (visual) $('sort').value = 'visits';
+  $('sort').closest('label').hidden = Boolean(reference);
+  $('similarity-mode').closest('label').hidden = !reference;
+  for (const option of $('similarity-mode').options) option.disabled = Boolean(reference?.uploaded && option.value !== 'visual');
 }
 function clearSimilarity() {
-  if (reference) $('all-images').checked = viewBeforeSimilarity;
+  if (reference) $('all-images').checked = viewBeforeSimilarity.allImages;
   if (reference?.url) URL.revokeObjectURL(reference.url);
   reference = null;
-  $('similarity-mode').closest('label').hidden = false;
   $('similarity-panel').hidden = true;
   similaritySort();
 }
 $('find-similar').addEventListener('click', () => {
+  if (!reference) saveViewBeforeSimilarity();
   saved?.reset();
   if (reference?.url) URL.revokeObjectURL(reference.url);
-  $('similarity-mode').closest('label').hidden = false;
-  if (!reference) viewBeforeSimilarity = $('all-images').checked;
   reference = {imageId: selectedImages[imageIndex].id, name: selectedGame.name || `Game ${selectedGame.id}`};
   imageSource($('reference-image'), reference.imageId);
   $('reference-name').textContent = reference.name;
@@ -372,15 +376,14 @@ $('upload-input')?.addEventListener('change', async event => {
   $('error').hidden = true;
   try {
     await window.galleryHost.searchImage(file);
+    if (!reference) saveViewBeforeSimilarity();
     saved?.reset();
-    if (!reference) viewBeforeSimilarity = $('all-images').checked;
     if (reference?.url) URL.revokeObjectURL(reference.url);
     reference = {uploaded: true, url: URL.createObjectURL(file)};
     $('reference-image').src = reference.url;
     $('reference-name').textContent = file.name;
     $('similarity-panel').hidden = false;
     $('similarity-mode').value = 'visual';
-    $('similarity-mode').closest('label').hidden = true;
     $('search').value = '';
     similaritySort();
     load(true);
@@ -391,7 +394,22 @@ $('upload-input')?.addEventListener('change', async event => {
   } finally { $('upload-search').disabled = false; }
 });
 $('similarity-mode').addEventListener('change', () => { similaritySort(); load(true); });
-$('clear-similarity').addEventListener('click', () => { clearSimilarity(); load(true); });
+$('clear-similarity').addEventListener('click', async () => {
+  const view = viewBeforeSimilarity;
+  clearSimilarity();
+  saved?.select(view.savedView);
+  kind = view.kind;
+  page = view.page;
+  pageSize = view.pageSize;
+  for (const [id, value] of Object.entries(view.values)) if ($(id)) $(id).value = value;
+  updateSubgenres();
+  $('subgenre').value = view.subgenre;
+  $('all-images').checked = view.allImages;
+  document.querySelectorAll('[data-kind]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.kind === kind)));
+  similaritySort();
+  await load();
+  window.scrollTo({top: view.scrollY});
+});
 $('close-viewer').addEventListener('click', () => $('viewer').close());
 $('viewer').addEventListener('close', () => lastTrigger?.focus());
 $('viewer').addEventListener('click', event => { if (event.target === $('viewer')) { const r = $('viewer').getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('viewer').close(); } });
