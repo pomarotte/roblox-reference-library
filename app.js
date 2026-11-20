@@ -41,7 +41,7 @@ async function status() {
   try {
     const data = await api('/api/status');
     $('collection-count').textContent = `${format.format(data.images)} images`;
-    $('collection-games').textContent = `${format.format(data.games)} games in your library`;
+    $('collection-games').textContent = `${format.format(data.games)} games tracked`;
     $('sync-title').textContent = data.pending ? `${format.format(data.ready)} / ${format.format(data.games)} games ready to filter` : `${format.format(data.ready)} games ready to explore`;
     $('sync-message').textContent = data.message + (data.unavailable ? ` ${format.format(data.unavailable)} games with metadata unavailable.` : '');
     $('sync-progress').max = data.games || 1;
@@ -89,7 +89,8 @@ function parameters() {
     params.set('all_images', '1');
   }
   if (reference) {
-    params.set('seed_image', reference.imageId);
+    if (reference.uploaded) params.set('uploaded', '1');
+    else params.set('seed_image', reference.imageId);
     params.set('similarity', $('similarity-mode').value);
   }
   for (const id of ['search', 'genre', 'subgenre', 'min_visits', 'max_visits']) {
@@ -336,12 +337,16 @@ function similaritySort() {
 }
 function clearSimilarity() {
   if (reference) $('all-images').checked = viewBeforeSimilarity;
+  if (reference?.url) URL.revokeObjectURL(reference.url);
   reference = null;
+  $('similarity-mode').closest('label').hidden = false;
   $('similarity-panel').hidden = true;
   similaritySort();
 }
 $('find-similar').addEventListener('click', () => {
   saved?.reset();
+  if (reference?.url) URL.revokeObjectURL(reference.url);
+  $('similarity-mode').closest('label').hidden = false;
   if (!reference) viewBeforeSimilarity = $('all-images').checked;
   reference = {imageId: selectedImages[imageIndex].id, name: selectedGame.name || `Game ${selectedGame.id}`};
   imageSource($('reference-image'), reference.imageId);
@@ -355,6 +360,35 @@ $('find-similar').addEventListener('click', () => {
   $('viewer').close();
   load(true);
   window.scrollTo({top: 0});
+});
+$('upload-search')?.addEventListener('click', () => $('upload-input').click());
+$('upload-input')?.addEventListener('change', async event => {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  $('upload-search').disabled = true;
+  $('loading').hidden = false;
+  $('loading-message').textContent = 'Preparing image search…';
+  $('error').hidden = true;
+  try {
+    await window.galleryHost.searchImage(file);
+    saved?.reset();
+    if (!reference) viewBeforeSimilarity = $('all-images').checked;
+    if (reference?.url) URL.revokeObjectURL(reference.url);
+    reference = {uploaded: true, url: URL.createObjectURL(file)};
+    $('reference-image').src = reference.url;
+    $('reference-name').textContent = file.name;
+    $('similarity-panel').hidden = false;
+    $('similarity-mode').value = 'visual';
+    $('similarity-mode').closest('label').hidden = true;
+    $('search').value = '';
+    similaritySort();
+    load(true);
+  } catch (error) {
+    $('loading').hidden = true;
+    $('error').textContent = error.message;
+    $('error').hidden = false;
+  } finally { $('upload-search').disabled = false; }
 });
 $('similarity-mode').addEventListener('change', () => { similaritySort(); load(true); });
 $('clear-similarity').addEventListener('click', () => { clearSimilarity(); load(true); });

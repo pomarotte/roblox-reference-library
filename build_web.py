@@ -78,6 +78,7 @@ def build(cache, output, extend=None):
     html = (HERE / 'index.html').read_text(encoding='utf-8')
     html = html.replace('href="/style.css"', 'href="./style.css"').replace('href="/"', 'href="./"')
     html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./collections.js" defer></script>\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
+    html = html.replace('<input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off">', '<input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off"><button id="upload-search" class="secondary" type="button">Search by image</button><input id="upload-input" type="file" accept="image/*" hidden>')
     html = html.replace('<section class="sync-panel"', (HERE / 'web' / 'setup.html').read_text(encoding='utf-8') + '\n    <section class="sync-panel"', 1)
     html = html.replace('<section class="sync-panel"', '<section hidden class="sync-panel"')
     html = html.replace('<section class="visual-panel"', '<section hidden class="visual-panel"')
@@ -85,7 +86,7 @@ def build(cache, output, extend=None):
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
     html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
-    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob:; script-src \'self\'; style-src \'self\'; connect-src \'self\'; worker-src \'self\'; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob:; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     for original, hashed in assets.items():
         html = html.replace(original, hashed)
     (output / 'index.html').write_text(html, encoding='utf-8')
@@ -127,3 +128,5 @@ if __name__ == '__main__':
         from_release(args.output)
     else:
         build(args.cache, args.output)
+
+

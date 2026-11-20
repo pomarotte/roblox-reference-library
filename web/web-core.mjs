@@ -49,13 +49,15 @@ export function sceneScore(matrix, candidate, seed, dimensions = 560) {
   return (scene + 0.03 * palette) / 1.03;
 }
 
-export function queryLibrary(state, params, available, matrix = null) {
+export function queryLibrary(state, params, available, matrix = null, uploaded = null) {
   const kind = params.get('kind') || 'thumbs', mode = params.get('similarity') || '';
   const dailyCategory = params.get('daily_category');
-  const seed = mode ? state.images.get(Number(params.get('seed_image'))) : null;
+  const external = params.get('uploaded') === '1';
+  const seed = mode && !external ? state.images.get(Number(params.get('seed_image'))) : null;
   if (!['icons', 'thumbs'].includes(kind)) throw new Error('Invalid image type.');
   if (!['', 'visual', 'both', 'type'].includes(mode)) throw new Error('Invalid similarity mode.');
-  if (mode && !seed) throw new Error('Select a reference image first.');
+  if (external && (mode !== 'visual' || !uploaded || uploaded.length !== 560)) throw new Error('Select an image to search first.');
+  if (mode && !seed && !external) throw new Error('Select a reference image first.');
   if (['both', 'type'].includes(mode) && (!seed.game.genre || seed.game.genre === 'Unknown')) throw new Error('Choose Visual appearance: this game has no genre metadata.');
   const visual = mode === 'visual' || mode === 'both';
   if (visual && !matrix) throw new Error('Load the saved scene index first.');
@@ -95,7 +97,14 @@ export function queryLibrary(state, params, available, matrix = null) {
       (!selectedIds || selectedIds.has(image.id)) && (!dailyCategory || image.daily_category === dailyCategory));
     for (const image of allImages ? saved : saved.slice(0, 1)) {
       const item = {id: game.id, name: game.name, genre: game.genre, subgenre: game.subgenre, visits: game.visits, status: game.status, image_count: saved.length, image_id: image.id, captured: image.captured};
-      if (visual) item.score = sceneScore(matrix, state.images.get(image.id).vectorIndex, seed.vectorIndex);
+      if (visual) {
+        const index = state.images.get(image.id).vectorIndex;
+        if (external) {
+          let score = 0;
+          for (let d = 0; d < 560; d++) score += matrix[index * 560 + d] * uploaded[d] * (d < 512 ? 1 : 0.03);
+          item.score = score / 1.03;
+        } else item.score = sceneScore(matrix, index, seed.vectorIndex);
+      }
       results.push(item);
     }
   }
@@ -115,3 +124,4 @@ export function queryLibrary(state, params, available, matrix = null) {
     return {...rest, similarity_score: Math.round(score * 1000) / 1000};
   })};
 }
+

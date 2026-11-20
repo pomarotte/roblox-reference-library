@@ -7,7 +7,7 @@
   worker.onmessage = ({data}) => {
     if ('progress' in data) {
       el('visual-message').textContent = data.progress;
-      if (data.busy && !el('loading').hidden && !el('similarity-panel').hidden) el('loading-message').textContent = data.progress;
+      if (data.busy && !el('loading').hidden && (!el('similarity-panel').hidden || el('upload-search').disabled)) el('loading-message').textContent = data.progress;
       return;
     }
     const task = pending.get(data.id);
@@ -62,6 +62,7 @@
     return data;
   });
   window.galleryHost = {
+    searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),
     async api(path, {signal} = {}) {
       await ready;
