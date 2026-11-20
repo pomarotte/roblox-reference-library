@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
+process.env.TZ = 'America/Los_Angeles';
 
 const game = {id: 7, status: 'ready', genre: 'Simulation', subgenre: 'Tycoon', images: [{id: 3, kind: 'thumbs', filename: '7 test.webp'}, {id: 4, kind: 'thumbs', captured: '20261119_000000', object_key: 'daily/test.webp'}, {id: 5, kind: 'icons', captured: '20261120_000000', object_key: 'daily/icon.webp'}]};
 let savedOptions;
@@ -17,7 +18,7 @@ vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
   const status = await window.galleryHost.api('/api/status');
   assert.equal(status.games, 1);
   assert.equal(status.images, 3);
-  assert.equal(lastUpdated.textContent, 'Last updated 2026-11-19 at 14:32 UTC');
+  assert.match(lastUpdated.textContent, /Nov 19, 2026, 6:32/);
   assert.equal(lastUpdated.hidden, false);
   const image = {tagName: 'IMG'};
   window.galleryHost.imageSource(image, 3);

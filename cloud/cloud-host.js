@@ -43,7 +43,12 @@
     if (dates.length) {
       const date = dates.reduce((latest, current) => current > latest ? current : latest);
       const time = el('last-updated').dataset.time;
-      el('last-updated').textContent = `Last updated ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}${time ? ' at ' + time : ''}`;
+      const day = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+      const match = /^(around )?(\d{2}:\d{2}) UTC$/.exec(time || '');
+      const updated = match
+        ? (match[1] || '') + new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(`${day}T${match[2]}:00Z`))
+        : day;
+      el('last-updated').textContent = `Last updated ${updated}`;
       el('last-updated').hidden = false;
     }
     await rpc('available', [...images.keys()]);
