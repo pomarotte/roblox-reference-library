@@ -96,7 +96,7 @@ async function encodeReference(file) {
   try { bitmap = await createImageBitmap(file); } catch (_) { throw new Error('This image could not be opened.'); }
   try {
     if (bitmap.width * bitmap.height > 40000000) throw new Error('Choose an image smaller than 40 megapixels.');
-    self.postMessage({progress: 'Loading the image search model (about 90 MB on first use)…', busy: true});
+    self.postMessage({progress: 'Loading image search…', busy: true});
     if (!imageModel) {
       const {AutoProcessor, CLIPVisionModelWithProjection, RawImage} = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
       const name = 'Xenova/clip-vit-base-patch32';
@@ -126,4 +126,5 @@ async function encodeReference(file) {
     return result;
   } finally { bitmap.close(); self.postMessage({progress: '', busy: false}); }
 }
+
 

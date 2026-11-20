@@ -78,7 +78,7 @@ def build(cache, output, extend=None):
     html = (HERE / 'index.html').read_text(encoding='utf-8')
     html = html.replace('href="/style.css"', 'href="./style.css"').replace('href="/"', 'href="./"')
     html = html.replace('<script src="/app.js" defer></script>', '<link rel="stylesheet" href="./web.css">\n  <script src="./collections.js" defer></script>\n  <script src="./web-host.js" defer></script>\n  <script src="./app.js" defer></script>')
-    html = html.replace('<header class="page-heading"><h2 id="explore-title">Explore Thumbnails</h2></header>', '<header class="page-heading"><h2 id="explore-title">Explore Thumbnails</h2><button id="upload-search" class="secondary" type="button">Search by image</button><input id="upload-input" type="file" accept="image/*" hidden></header>')
+    html = html.replace('<input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off">', '<input id="search" type="search" placeholder="Game name or universe ID" autocomplete="off"><button id="upload-search" class="secondary" type="button">Search by image</button><input id="upload-input" type="file" accept="image/*" hidden>')
     html = html.replace('<section class="sync-panel"', (HERE / 'web' / 'setup.html').read_text(encoding='utf-8') + '\n    <section class="sync-panel"', 1)
     html = html.replace('<section class="sync-panel"', '<section hidden class="sync-panel"')
     html = html.replace('<section class="visual-panel"', '<section hidden class="visual-panel"')
@@ -128,4 +128,5 @@ if __name__ == '__main__':
         from_release(args.output)
     else:
         build(args.cache, args.output)
+
 

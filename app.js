@@ -41,7 +41,7 @@ async function status() {
   try {
     const data = await api('/api/status');
     $('collection-count').textContent = `${format.format(data.thumbnails)} thumbnails · ${format.format(data.icons)} icons`;
-    $('collection-games').textContent = `${format.format(data.games)} games in your library`;
+    $('collection-games').textContent = `${format.format(data.games)} games tracked`;
     $('sync-title').textContent = data.pending ? `${format.format(data.ready)} / ${format.format(data.games)} games ready to filter` : `${format.format(data.ready)} games ready to explore`;
     $('sync-message').textContent = data.message + (data.unavailable ? ` ${format.format(data.unavailable)} games with metadata unavailable.` : '');
     $('sync-progress').max = data.games || 1;
@@ -436,4 +436,5 @@ window.addEventListener('gallery:saved', () => { if (saved?.active) load(true); 
 $('daily-category')?.addEventListener('change', () => load(true));
 status();
 load();
+
 
