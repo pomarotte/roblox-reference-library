@@ -39,6 +39,12 @@
     catalogue = data;
     images = new Map();
     for (const game of data.games) for (const image of game.images) images.set(image.id, image);
+    const dates = [...images.values()].filter(image => image.kind === 'thumbs' && image.object_key && /^\d{8}_/.test(image.captured)).map(image => image.captured.slice(0, 8));
+    if (dates.length) {
+      const date = dates.reduce((latest, current) => current > latest ? current : latest);
+      el('last-updated').textContent = `Last updated ${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+      el('last-updated').hidden = false;
+    }
     await rpc('available', [...images.keys()]);
     return data;
   });

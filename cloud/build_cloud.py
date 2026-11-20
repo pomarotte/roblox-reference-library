@@ -31,6 +31,7 @@ def build_cloud(output, extend=None, cache=GALLERY):
     html = html.replace('<body class="web-disconnected">', '<body>')
     html = html.replace('<section class="folder-panel"', '<section hidden class="folder-panel"')
     html = html.replace('<button id="quit"', '<button hidden id="quit"')
+    html = html.replace('<span id="collection-games">Reading local images</span>', '<span id="collection-games">Reading local images</span><span id="last-updated" hidden></span>')
     html = html.replace("img-src 'self' blob:", "img-src 'self' blob: https://rolibrary.win")
     html = html.replace("connect-src 'self'", "connect-src 'self' https://rolibrary.win")
     html = html.replace('Choose your dataset folder above to show its saved images.', '')
