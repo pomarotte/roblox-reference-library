@@ -40,7 +40,7 @@ function updateSubgenres() {
 async function status() {
   try {
     const data = await api('/api/status');
-    $('collection-count').textContent = `${format.format(data.images)} images`;
+    $('collection-count').textContent = `${format.format(data.thumbnails)} thumbnails · ${format.format(data.icons)} icons`;
     $('collection-games').textContent = `${format.format(data.games)} games in your library`;
     $('sync-title').textContent = data.pending ? `${format.format(data.ready)} / ${format.format(data.games)} games ready to filter` : `${format.format(data.ready)} games ready to explore`;
     $('sync-message').textContent = data.message + (data.unavailable ? ` ${format.format(data.unavailable)} games with metadata unavailable.` : '');
@@ -188,7 +188,7 @@ async function load(reset = false) {
     $('grid').classList.toggle('icons', kind === 'icons');
     $('grid').replaceChildren(...data.items.map(card));
     $('empty').hidden = total !== 0;
-    const unit = saved?.active || $('all-images').checked || dailyCategory() === 'new-images' ? 'images' : 'games';
+    const unit = dailyCategory() === 'new-images' ? (kind === 'icons' ? 'icons' : 'thumbnails') : saved?.active || $('all-images').checked ? 'images' : 'games';
     if ($('daily-category')) {
       $('empty').querySelector('h3').textContent = dailyCategory() === 'new-games' ? 'No matching games added in the latest scan.'
         : dailyCategory() === 'new-images' ? 'No matching new images in the latest scan.' : 'No games in this view.';

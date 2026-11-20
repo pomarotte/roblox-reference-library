@@ -69,7 +69,7 @@
       if (path === '/api/status') {
         const facets = new Map();
         for (const game of catalogue.games) if (game.status === 'ready') facets.set(`${game.genre}\0${game.subgenre}`, {genre: game.genre, subgenre: game.subgenre});
-        return {games: catalogue.games.length, images: images.size, ready: catalogue.games.filter(g => g.status === 'ready').length, pending: 0, unavailable: catalogue.games.filter(g => g.status === 'unavailable').length, facets: [...facets.values()]};
+        return {games: catalogue.games.length, images: images.size, thumbnails: [...images.values()].filter(image => image.kind === 'thumbs').length, icons: [...images.values()].filter(image => image.kind === 'icons').length, ready: catalogue.games.filter(g => g.status === 'ready').length, pending: 0, unavailable: catalogue.games.filter(g => g.status === 'unavailable').length, facets: [...facets.values()]};
       }
       if (path.startsWith('/api/library?')) return rpc('query', path.split('?')[1]);
       if (path.startsWith('/api/game/')) return rpc('game', Number(path.split('/').pop()));
@@ -81,3 +81,4 @@
     }
   };
 })();
+
