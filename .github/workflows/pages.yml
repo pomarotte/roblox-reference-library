@@ -109,6 +109,21 @@ jobs:
             args+=(--rebuild-day "$day")
           fi
           python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud "${args[@]}"
+      - name: Build preview with the same daily catalogue
+        if: steps.daily.outputs.enabled == 'true'
+        run: |
+          cd .preview-source
+          python - "$GITHUB_WORKSPACE/.web-build/preview" "$RUNNER_TEMP/daily/dataset.sqlite3" "$RUNNER_TEMP" <<'PY'
+          import sqlite3
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, 'cloud')
+          from run_daily import publish
+          output, database, cache = map(Path, sys.argv[1:])
+          with sqlite3.connect(database) as db:
+              day = db.execute("SELECT MAX(observed_date) FROM observations").fetchone()[0]
+          publish(output, database, day, cache)
+          PY
       - name: Save the daily checkpoint
         if: steps.daily.outputs.enabled == 'true' && steps.scan.outputs.rebuild != 'true'
         uses: actions/upload-artifact@v4
