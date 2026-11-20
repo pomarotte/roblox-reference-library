@@ -86,7 +86,8 @@ def build(cache, output, extend=None):
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
     html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
-    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob:; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.buymeacoffee.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; worker-src \'self\' blob:; frame-src https://buymeacoffee.com https://*.buymeacoffee.com; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    html = html.replace('</body>', '<script data-name="BMC-Widget" data-cfasync="false" src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js" data-id="winpo1" data-description="Support me on Buy me a coffee!" data-message="Thank you for supporting the website :) " data-color="#40DCA5" data-position="Right" data-x_margin="18" data-y_margin="18"></script>\n</body>')
     for original, hashed in assets.items():
         html = html.replace(original, hashed)
     (output / 'index.html').write_text(html, encoding='utf-8')
