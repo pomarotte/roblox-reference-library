@@ -41,11 +41,11 @@ export function decodeHalf(bytes) {
   return values;
 }
 
-export function sceneScore(matrix, candidate, seed, dimensions = 560) {
+export function sceneScore(matrix, candidate, seed, dimensions = 560, reference = matrix) {
   let scene = 0, palette = 0;
   const a = candidate * dimensions, b = seed * dimensions;
-  for (let d = 0; d < 512; d++) scene += matrix[a + d] * matrix[b + d];
-  for (let d = 512; d < dimensions; d++) palette += matrix[a + d] * matrix[b + d];
+  for (let d = 0; d < 512; d++) scene += matrix[a + d] * reference[b + d];
+  for (let d = 512; d < dimensions; d++) palette += matrix[a + d] * reference[b + d];
   return (scene + 0.03 * palette) / 1.03;
 }
 
@@ -99,7 +99,10 @@ export function queryLibrary(state, params, available, matrix = null, uploaded =
       const item = {id: game.id, name: game.name, genre: game.genre, subgenre: game.subgenre, visits: game.visits, status: game.status, image_count: saved.length, image_id: image.id, captured: image.captured};
       if (visual) {
         const index = state.images.get(image.id).vectorIndex;
-        if (external) {
+        if (typeof matrix === 'function') {
+          item.score = matrix(index);
+          if (item.score === undefined) continue;
+        } else if (external) {
           let score = 0;
           for (let d = 0; d < 560; d++) score += matrix[index * 560 + d] * uploaded[d] * (d < 512 ? 1 : 0.03);
           item.score = score / 1.03;

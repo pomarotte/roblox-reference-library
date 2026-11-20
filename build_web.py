@@ -50,14 +50,21 @@ def build(cache, output, extend=None):
             scenes, palettes = extend(games, images, scenes, palettes)
             if len(scenes) != len(images) or len(palettes) != len(images):
                 raise ValueError('Daily images and visual features do not align.')
+        centers, labels = scene_clusters(scenes, len(ids))
         parts = []
-        for start in range(0, len(images), 8192):
-            block = np.concatenate((scenes[start:start + 8192], palettes[start:start + 8192]), axis=1)
+        for cluster, center in enumerate(centers):
+            rows = np.flatnonzero(labels == cluster)
+            if not len(rows):
+                continue
+            for row in rows:
+                images[row]['visual_part'] = len(parts)
+            block = np.concatenate((scenes[rows], palettes[rows]), axis=1)
             compressed = gzip.compress(block.astype('<f2').tobytes(), compresslevel=6, mtime=0)
             digest = hashlib.sha256(compressed).hexdigest()
-            filename = f'scenes-{start}-{digest[:12]}.bin.gz'
+            filename = f'scenes-{cluster}-{digest[:12]}.bin.gz'
             (data_dir / filename).write_bytes(compressed)
-            parts.append({'url': f'data/{filename}', 'rows': len(block), 'bytes': len(compressed), 'sha256': digest})
+            parts.append({'url': f'data/{filename}', 'rows': len(block), 'bytes': len(compressed), 'sha256': digest,
+                          'center': center.round(6).astype(float).tolist()})
     catalogue = {'schema': 1, 'games': games, 'image_count': len(images), 'visual': {'dimensions': 560, 'parts': parts}}
     raw = json.dumps(catalogue, separators=(',', ':'), ensure_ascii=False).encode()
     compressed_catalogue = gzip.compress(raw, mtime=0)
@@ -93,6 +100,30 @@ def build(cache, output, extend=None):
     (output / 'index.html').write_text(html, encoding='utf-8')
     (output / '.nojekyll').write_text('')
     print(f'Built {len(games):,} games / {len(images):,} images. No image files copied. Visual download: {sum(p["bytes"] for p in parts) / 1048576:.1f} MiB.')
+
+
+def scene_clusters(scenes, historical_count):
+    import numpy as np
+
+    if not len(scenes):
+        return [], []
+    rng = np.random.default_rng(42)
+    count = max(1, (len(scenes) + 4499) // 4500)
+    source_count = historical_count or len(scenes)
+    sample = scenes[rng.choice(source_count, min(source_count, max(16384, count)), replace=False)].astype(np.float32)
+    centers = sample[rng.choice(len(sample), min(count, len(sample)), replace=False)].copy()
+    for _ in range(5):
+        labels = (sample @ centers.T).argmax(axis=1)
+        sums = np.zeros_like(centers)
+        np.add.at(sums, labels, sample)
+        norms = np.linalg.norm(sums, axis=1)
+        nonempty = norms > 0
+        centers[nonempty] = sums[nonempty] / norms[nonempty, None]
+    labels = np.empty(len(scenes), dtype=np.int32)
+    for start in range(0, len(scenes), 8192):
+        chunk = scenes[start:start + 8192].astype(np.float32)
+        labels[start:start + len(chunk)] = (chunk @ centers.T).argmax(axis=1)
+    return centers, labels
 
 
 @contextmanager

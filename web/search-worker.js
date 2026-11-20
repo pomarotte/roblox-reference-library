@@ -1,6 +1,6 @@
-import {prepareCatalogue, decodeHalf, queryLibrary} from './web-core.mjs';
+import {prepareCatalogue, decodeHalf, queryLibrary, sceneScore} from './web-core.mjs';
 
-let state, available = new Set(), matrix, loading, uploaded, imageModel;
+let state, available = new Set(), sections, locations, clustered, uploaded, imageModel;
 const initialized = initialize();
 
 async function gunzip(response) {
@@ -14,59 +14,116 @@ async function initialize() {
   return state.catalogue;
 }
 
-async function loadIndex() {
-  if (matrix) return;
-  if (loading) return loading;
-  loading = (async () => {
-    const {parts, dimensions} = state.catalogue.visual;
-    const values = new Float32Array(state.ordered.length * dimensions);
-    let offset = 0, completed = 0;
-    let cache;
-    try { cache = await caches.open('roblox-scenes-v1'); } catch (_) { /* Browser storage can be disabled. */ }
-    const sections = parts.map(part => {
-      const start = offset;
-      offset += part.rows * dimensions;
-      return {part, start, url: new URL(part.url, self.location.href).href};
-    });
-    if (offset !== values.length) throw new Error('Incomplete scene index.');
-    const progress = () => self.postMessage({progress: `Loading scene search: ${completed} / ${parts.length}`, busy: true});
-    async function loadPart({part, start, url}) {
-      const cached = await cache?.match(url);
-      const response = cached || await fetch(url);
-      if (!response.ok) throw new Error('Could not download the scene index. Check your connection and retry.');
-      const compressed = await response.arrayBuffer();
-      const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', compressed)), n => n.toString(16).padStart(2, '0')).join('');
-      if (digest !== part.sha256) {
-        await cache?.delete(url);
-        throw new Error('A search-index download is damaged. Please retry.');
-      }
-      const bytes = await gunzip(new Response(compressed));
-      if (bytes.byteLength !== part.rows * dimensions * 2) throw new Error('Incorrect search-index size.');
-      values.set(decodeHalf(bytes), start);
-      if (cache && !cached) {
-        try { await cache.put(url, new Response(compressed)); } catch (_) { /* Searching still works when storage is full. */ }
-      }
-      completed++;
-      progress();
+function prepareIndex() {
+  const {parts, dimensions} = state.catalogue.visual;
+  if (dimensions !== 560) throw new Error('Incorrect search-index dimensions.');
+  const hasCenters = parts.length > 0 && parts.every(part =>
+    Array.isArray(part.center) && part.center.length === 512 && part.center.every(Number.isFinite));
+  const index = parts.map(part => ({part, rows: 0, url: new URL(part.url, self.location.href).href}));
+  let next = 0;
+  const positions = state.ordered.map(image => {
+    while (!hasCenters && index[next] && index[next].rows === index[next].part.rows) next++;
+    const section = index[hasCenters ? image.visual_part : next];
+    if (!section || section.rows >= section.part.rows) throw new Error('Incomplete scene index.');
+    return {section, row: section.rows++};
+  });
+  if (index.some(section => section.rows !== section.part.rows)) throw new Error('Incomplete scene index.');
+  sections = index;
+  locations = positions;
+  clustered = hasCenters;
+}
+
+async function openIndexCache() {
+  try {
+    const cache = await caches.open('roblox-scenes-v1');
+    const directory = new URL('./data/', self.location.href).href;
+    const expected = new Set(sections.map(section => section.url));
+    for (const request of await cache.keys()) {
+      if (request.url.startsWith(directory) && !expected.has(request.url)) await cache.delete(request);
     }
-    progress();
-    for (let start = 0; start < sections.length; start += 4) {
-      const results = await Promise.allSettled(sections.slice(start, start + 4).map(loadPart));
+    return cache;
+  } catch (_) { /* Searching works without browser storage. */ }
+}
+
+let indexCache;
+function loadSection(section) {
+  return section.loading ??= (async () => {
+    const cache = await (indexCache ??= openIndexCache());
+    const {part, url} = section;
+    const cached = await cache?.match(url);
+    const response = cached || await fetch(url);
+    if (!response.ok) throw new Error('Could not download the scene index. Check your connection and retry.');
+    const compressed = await response.arrayBuffer();
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', compressed)), n => n.toString(16).padStart(2, '0')).join('');
+    if (digest !== part.sha256) {
+      await cache?.delete(url);
+      throw new Error('A search-index download is damaged. Please retry.');
+    }
+    const bytes = await gunzip(new Response(compressed));
+    if (bytes.byteLength !== part.rows * 560 * 2) throw new Error('Incorrect search-index size.');
+    const values = decodeHalf(bytes);
+    if (cache && !cached) {
+      try { await cache.put(url, new Response(compressed)); } catch (_) { /* Searching works when storage is full. */ }
+    }
+    return values;
+  })().catch(error => {
+    section.loading = null;
+    throw error;
+  });
+}
+
+async function searchIndex(params, available, reference) {
+  const external = params.get('uploaded') === '1';
+  const seed = state.images.get(Number(params.get('seed_image')));
+  const mode = params.get('similarity');
+  if (external ? mode !== 'visual' || !reference : !seed) {
+    return queryLibrary(state, params, available, null, reference);
+  }
+  if (!sections) prepareIndex();
+  const anchor = external ? null : locations[seed.vectorIndex];
+  const loaded = new Map();
+  async function load(requested) {
+    const missing = requested.filter(section => !loaded.has(section));
+    for (let start = 0; start < missing.length; start += 4) {
+      self.postMessage({progress: `Loading scene search: ${start} / ${missing.length}`, busy: true});
+      const results = await Promise.allSettled(missing.slice(start, start + 4).map(async section => {
+        loaded.set(section, await loadSection(section));
+      }));
       const failed = results.find(result => result.status === 'rejected');
       if (failed) throw failed.reason;
     }
-    matrix = values;
-    if (cache) {
-      const directory = new URL('./data/', self.location.href).href;
-      const expected = new Set(sections.map(section => section.url));
-      try {
-        for (const request of await cache.keys()) {
-          if (request.url.startsWith(directory) && !expected.has(request.url)) await cache.delete(request);
-        }
-      } catch (_) { /* Cached index maintenance is optional. */ }
+  }
+  try {
+    if (anchor) await load([anchor.section]);
+    const vector = anchor ? loaded.get(anchor.section) : reference;
+    const row = anchor?.row ?? 0;
+    const filtered = available.size !== state.ordered.length ||
+      ['search', 'genre', 'subgenre', 'min_visits', 'max_visits', 'first_from', 'first_to', 'daily_category', 'saved_ids'].some(key => params.get(key));
+    const approximate = clustered && !filtered && sections.length > 8;
+    const eligible = new Set();
+    if (!approximate || mode === 'both') {
+      queryLibrary(state, params, available, index => { eligible.add(locations[index].section); }, reference);
     }
-  })();
-  try { await loading; } finally { loading = null; self.postMessage({progress: '', busy: false}); }
+    const candidates = !approximate || mode === 'both' ? [...eligible] : sections;
+    // shortcut: fixed probe count can miss close matches; tune using measured recall as the catalogue grows.
+    if (approximate) {
+      const nearest = candidates.map(section => {
+        let score = 0;
+        for (let d = 0; d < 512; d++) score += section.part.center[d] * vector[row * 560 + d];
+        return {section, score};
+      }).sort((a, b) => b.score - a.score);
+      await load(nearest.slice(0, 8).map(item => item.section));
+    } else await load(candidates);
+    const score = index => {
+      const candidate = locations[index];
+      const values = loaded.get(candidate.section);
+      if (values) return sceneScore(values, candidate.row, row, 560, vector);
+    };
+    const result = queryLibrary(state, params, available, score, reference);
+    if (!approximate || result.total >= 480 || candidates.every(section => loaded.has(section))) return result;
+    await load(candidates);
+    return queryLibrary(state, params, available, score, reference);
+  } finally { self.postMessage({progress: '', busy: false}); }
 }
 
 self.onmessage = async ({data}) => {
@@ -83,8 +140,9 @@ self.onmessage = async ({data}) => {
       result = {...game, images: game.images.filter(image => available.has(image.id))};
     } else if (action === 'query') {
       const params = new URLSearchParams(value);
-      if (['visual', 'both'].includes(params.get('similarity'))) await loadIndex();
-      result = queryLibrary(state, params, available, matrix, uploaded);
+      result = ['visual', 'both'].includes(params.get('similarity'))
+        ? await searchIndex(params, available, uploaded)
+        : queryLibrary(state, params, available);
     } else throw new Error('Unknown gallery action.');
     self.postMessage({id, result});
   } catch (error) { self.postMessage({id, error: error.message}); }
