@@ -1,7 +1,7 @@
 """Capture Roblox charts and publish a matching catalogue and visual index."""
 import argparse
 from contextlib import closing
-from datetime import date
+from datetime import date, datetime, timezone
 import hashlib
 import importlib.util
 import os
@@ -37,6 +37,7 @@ def capture(script, state, limit):
     collector.open_database()
     db = collector.db
     try:
+        previous_thumbnails = db.execute("SELECT COUNT(*) FROM game_images WHERE kind='thumbnail' AND first_seen=?", (collector.day,)).fetchone()[0]
         db.execute('CREATE TABLE IF NOT EXISTS metadata (universe_id INTEGER PRIMARY KEY, genre TEXT, subgenre TEXT)')
         sorts = collector.request_json(module.ROBLOX + '/explore-api/v1/get-sorts',
                                        {'sessionId': collector.session_id, 'device': 'computer', 'country': 'all'})
@@ -70,6 +71,11 @@ def capture(script, state, limit):
             raise RuntimeError(f'{collector.errors} collection errors. The last published catalogue is still available.')
         if not db.execute('SELECT 1 FROM observations WHERE observed_date=? LIMIT 1', (collector.day,)).fetchone():
             raise RuntimeError('No chart images were observed.')
+        current_thumbnails = db.execute("SELECT COUNT(*) FROM game_images WHERE kind='thumbnail' AND first_seen=?", (collector.day,)).fetchone()[0]
+        if current_thumbnails > previous_thumbnails:
+            db.execute("INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",
+                       ('thumbnail_update_' + collector.day, datetime.now(timezone.utc).isoformat(timespec='seconds')))
+            db.commit()
         return collector.day
     finally:
         db.close()
@@ -209,6 +215,16 @@ def publish(output, database, day, cache):
     with tempfile.TemporaryDirectory(dir=output.parent) as stage:
         stage = Path(stage)
         build_cloud(stage, extend=lambda *data: merge_daily(database, day, *data, historical_images), cache=cache)
+        with closing(sqlite3.connect(database)) as daily:
+            latest_day = daily.execute("SELECT MAX(first_seen) FROM game_images WHERE kind='thumbnail'").fetchone()[0]
+            row = daily.execute("SELECT value FROM settings WHERE key=?", ('thumbnail_update_' + str(latest_day),)).fetchone()
+        if row:
+            stamp = datetime.fromisoformat(row[0]).astimezone(timezone.utc)
+            if stamp.date().isoformat() == latest_day:
+                page = stage / 'index.html'
+                html = page.read_text(encoding='utf-8')
+                html = html.replace('id="last-updated" hidden', f'id="last-updated" data-time="{stamp.strftime("%H:%M")} UTC" hidden')
+                page.write_text(html, encoding='utf-8')
         for asset in stage.iterdir():
             if asset.is_dir():
                 shutil.copytree(asset, output / asset.name, dirs_exist_ok=True)

@@ -4,7 +4,7 @@ const vm = require('node:vm');
 
 const game = {id: 7, status: 'ready', genre: 'Simulation', subgenre: 'Tycoon', images: [{id: 3, kind: 'thumbs', filename: '7 test.webp'}, {id: 4, kind: 'thumbs', captured: '20261119_000000', object_key: 'daily/test.webp'}, {id: 5, kind: 'icons', captured: '20261120_000000', object_key: 'daily/icon.webp'}]};
 let savedOptions;
-const lastUpdated = {hidden: true};
+const lastUpdated = {hidden: true, dataset: {time: '14:32 UTC'}};
 class Worker {
   postMessage({id, action}) {
     queueMicrotask(() => this.onmessage({data: {id, result: action === 'init' ? {games: [game]} : action === 'query' ? {total: 1} : {}}}));
@@ -17,7 +17,7 @@ vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
   const status = await window.galleryHost.api('/api/status');
   assert.equal(status.games, 1);
   assert.equal(status.images, 3);
-  assert.equal(lastUpdated.textContent, 'Last updated 2026-11-19');
+  assert.equal(lastUpdated.textContent, 'Last updated 2026-11-19 at 14:32 UTC');
   assert.equal(lastUpdated.hidden, false);
   const image = {tagName: 'IMG'};
   window.galleryHost.imageSource(image, 3);
