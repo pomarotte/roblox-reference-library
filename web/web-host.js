@@ -31,7 +31,7 @@
     if ('progress' in data) {
       el('visual-message').textContent = data.progress;
       el('visual-message').closest('section').hidden = true;
-      if (data.busy && !el('loading').hidden && !el('similarity-panel').hidden && el('similarity-mode').value !== 'type') el('loading-message').textContent = data.progress;
+      if (data.busy && !el('loading').hidden && (!el('similarity-panel').hidden || el('upload-search').disabled) && el('similarity-mode').value !== 'type') el('loading-message').textContent = data.progress;
       return;
     }
     const task = pending.get(data.id);
@@ -204,6 +204,7 @@
     return file;
   }
   window.galleryHost = {
+    searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),
     async api(path, {signal} = {}) {
       await ready;

@@ -1,6 +1,6 @@
 import {prepareCatalogue, decodeHalf, queryLibrary} from './web-core.mjs';
 
-let state, available = new Set(), matrix, loading;
+let state, available = new Set(), matrix, loading, uploaded, imageModel;
 const initialized = initialize();
 
 async function gunzip(response) {
@@ -75,6 +75,7 @@ self.onmessage = async ({data}) => {
     const catalogue = await initialized;
     let result;
     if (action === 'init') result = catalogue;
+    else if (action === 'reference') { uploaded = await encodeReference(value); result = true; }
     else if (action === 'available') { available = new Set(value); result = {images: available.size}; }
     else if (action === 'game') {
       const game = state.games.get(value);
@@ -83,8 +84,46 @@ self.onmessage = async ({data}) => {
     } else if (action === 'query') {
       const params = new URLSearchParams(value);
       if (['visual', 'both'].includes(params.get('similarity'))) await loadIndex();
-      result = queryLibrary(state, params, available, matrix);
+      result = queryLibrary(state, params, available, matrix, uploaded);
     } else throw new Error('Unknown gallery action.');
     self.postMessage({id, result});
   } catch (error) { self.postMessage({id, error: error.message}); }
 };
+
+async function encodeReference(file) {
+  if (!file || !file.type.startsWith('image/') || !file.size || file.size > 20 * 1024 * 1024) throw new Error('Choose an image smaller than 20 MB.');
+  let bitmap;
+  try { bitmap = await createImageBitmap(file); } catch (_) { throw new Error('This image could not be opened.'); }
+  try {
+    if (bitmap.width * bitmap.height > 40000000) throw new Error('Choose an image smaller than 40 megapixels.');
+    self.postMessage({progress: 'Loading the image search model (about 90 MB on first use)…', busy: true});
+    if (!imageModel) {
+      const {AutoProcessor, CLIPVisionModelWithProjection, RawImage} = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
+      const name = 'Xenova/clip-vit-base-patch32';
+      const [processor, model] = await Promise.all([AutoProcessor.from_pretrained(name, {revision: 'd15189d'}), CLIPVisionModelWithProjection.from_pretrained(name, {revision: 'd15189d', dtype: 'q8'})]);
+      imageModel = {processor, model, RawImage};
+    }
+    self.postMessage({progress: 'Analyzing your image on this device…', busy: true});
+    const canvas = new OffscreenCanvas(224, 224), context = canvas.getContext('2d');
+    context.fillStyle = 'rgb(123,117,104)'; context.fillRect(0, 0, 224, 224);
+    const scale = Math.min(224 / bitmap.width, 224 / bitmap.height);
+    const width = Math.round(bitmap.width * scale), height = Math.round(bitmap.height * scale);
+    context.drawImage(bitmap, Math.floor((224 - width) / 2), Math.floor((224 - height) / 2), width, height);
+    const pixels = context.getImageData(0, 0, 224, 224).data;
+    const rgb = new Uint8Array(224 * 224 * 3);
+    for (let i = 0; i < 224 * 224; i++) for (let c = 0; c < 3; c++) rgb[i * 3 + c] = pixels[i * 4 + c];
+    const input = await imageModel.processor(new imageModel.RawImage(rgb, 224, 224, 3));
+    const {image_embeds} = await imageModel.model(input);
+    const vector = image_embeds.data, norm = Math.hypot(...vector);
+    if (vector.length !== 512 || !Number.isFinite(norm) || !norm) throw new Error('Could not analyze this image.');
+    const result = new Float32Array(560);
+    for (let i = 0; i < 512; i++) result[i] = vector[i] / norm;
+    const small = new OffscreenCanvas(64, 64), colors = small.getContext('2d');
+    colors.fillStyle = '#000'; colors.fillRect(0, 0, 64, 64); colors.drawImage(bitmap, 0, 0, 64, 64);
+    const data = colors.getImageData(0, 0, 64, 64).data;
+    for (let i = 0; i < data.length; i += 4) for (let c = 0; c < 3; c++) result[512 + c * 16 + (data[i + c] >> 4)]++;
+    for (let i = 512; i < 560; i++) result[i] = Math.sqrt(result[i] / (64 * 64 * 3));
+    return result;
+  } finally { bitmap.close(); self.postMessage({progress: '', busy: false}); }
+}
+
