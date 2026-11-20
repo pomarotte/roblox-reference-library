@@ -1,6 +1,6 @@
 'use strict';
 window.galleryCollections = (() => {
-  const storageKey = 'thumbnail-explorer-collections-v1';
+  const storageKey = 'thumbnail-explorer-collections-v1' + (window.location?.pathname.includes('/preview/') ? '-preview' : '');
   function createStore(storage) {
     let data;
     function read() {
