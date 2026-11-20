@@ -13,3 +13,5 @@ dialog{background:#1c2022;color:var(--ink);border:1px solid #454c4f;border-radiu
 
 .viewer-actions strong{display:block;font-size:12px;margin-bottom:6px}.viewer-actions .action-buttons{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px}.viewer-actions #viewer-saved-actions{display:flex;gap:8px;margin:0}.viewer-actions #viewer-saved-actions[hidden]{display:none}
 
+.viewer-title-row{display:flex;align-items:center;flex-wrap:wrap;gap:12px}.viewer-title-row h2{margin:8px 0}.viewer-actions>.action-buttons:only-child{margin-left:auto}.viewer-actions>div:not(.action-buttons){display:block}
+
