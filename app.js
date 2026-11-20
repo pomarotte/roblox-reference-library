@@ -403,11 +403,14 @@ $('viewer').addEventListener('keydown', event => {
 $('download-image').addEventListener('click', async () => {
   try {
     const image = selectedImages[imageIndex];
-    const source = $('open-image').getAttribute('href');
-    if (!source) throw new Error('Image is not available yet. Please try again.');
-    const response = await fetch(source);
-    if (!response.ok) throw new Error('Could not download this image.');
-    const url = URL.createObjectURL(await response.blob());
+    let file;
+    if (window.galleryHost) file = await window.galleryHost.imageFile(image.id);
+    else {
+      const response = await fetch(`/image/${image.id}`);
+      if (!response.ok) throw new Error('Could not download this image.');
+      file = await response.blob();
+    }
+    const url = URL.createObjectURL(file);
     const link = node('a');
     link.href = url; link.download = image.filename; document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);

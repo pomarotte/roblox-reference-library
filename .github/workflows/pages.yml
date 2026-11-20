@@ -23,10 +23,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: main
-      - uses: actions/checkout@v6
-        with:
-          ref: preview
-          path: .preview-source
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
@@ -37,7 +33,6 @@ jobs:
         run: |
           python - <<'PY'
           import sys
-          import subprocess
           from pathlib import Path
           from build_web import build, release_cache
           sys.path.insert(0, 'cloud')
@@ -45,9 +40,6 @@ jobs:
           with release_cache() as cache:
               build(cache, Path('.web-build/local'))
               build_cloud(Path('.web-build/cloud'), cache=cache)
-              subprocess.run([sys.executable, '-c',
-                  'import sys; from pathlib import Path; sys.path.insert(0, "cloud"); from build_cloud import build_cloud; build_cloud(Path(sys.argv[1]), cache=Path(sys.argv[2]))',
-                  str(Path('.web-build/preview').resolve()), str(cache.resolve())], cwd='.preview-source', check=True)
               import shutil
               for name in ('library.sqlite3', 'search-index.npz'):
                   shutil.move(cache / name, Path('${{ runner.temp }}') / name)
@@ -109,21 +101,6 @@ jobs:
             args+=(--rebuild-day "$day")
           fi
           python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud "${args[@]}"
-      - name: Build preview with the same daily catalogue
-        if: steps.daily.outputs.enabled == 'true'
-        run: |
-          cd .preview-source
-          python - "$GITHUB_WORKSPACE/.web-build/preview" "$RUNNER_TEMP/daily/dataset.sqlite3" "$RUNNER_TEMP" <<'PY'
-          import sqlite3
-          import sys
-          from pathlib import Path
-          sys.path.insert(0, 'cloud')
-          from run_daily import publish
-          output, database, cache = map(Path, sys.argv[1:])
-          with sqlite3.connect(database) as db:
-              day = db.execute("SELECT MAX(observed_date) FROM observations").fetchone()[0]
-          publish(output, database, day, cache)
-          PY
       - name: Save the daily checkpoint
         if: steps.daily.outputs.enabled == 'true' && steps.scan.outputs.rebuild != 'true'
         uses: actions/upload-artifact@v4
@@ -139,6 +116,7 @@ jobs:
           import shutil
           root = Path('.web-build')
           cloud = root / 'cloud'
+          shutil.copytree(cloud, root / 'preview')
           for item in cloud.iterdir():
               shutil.move(str(item), str(root / item.name))
           (cloud / 'index.html').write_text('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=../"><a href="../">Open gallery</a>', encoding='utf-8')

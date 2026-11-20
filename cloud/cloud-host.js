@@ -62,6 +62,7 @@
     return data;
   });
   window.galleryHost = {
+    imageFile,
     searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),
     async api(path, {signal} = {}) {
