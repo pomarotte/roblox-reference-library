@@ -47,12 +47,11 @@
     <nav class="pagination" aria-label="Result pages"><button id="previous" class="secondary" type="button" disabled>← Previous</button><span id="page-label">Page 1</span><button id="next" class="secondary" type="button" disabled>Next →</button></nav>
   </main>
   <dialog id="viewer" aria-labelledby="viewer-title">
-    <div class="viewer-header"><div><span class="eyebrow" id="viewer-genre"></span><div class="viewer-title-row"><h2 id="viewer-title">Game preview</h2><a id="game-page" class="secondary" target="_blank" rel="noopener noreferrer" hidden>Open game page ↗</a></div></div><button id="close-viewer" class="close-button" aria-label="Close preview" type="button">×</button></div>
+    <div class="viewer-header"><div><span class="eyebrow" id="viewer-genre"></span><div class="viewer-title-row"><h2 id="viewer-title">Game preview</h2><a id="game-page" class="secondary" target="_blank" rel="noopener noreferrer" aria-label="Open game page" hidden>↗</a></div><p id="viewer-visits" class="viewer-visits"></p></div><button id="close-viewer" class="close-button" aria-label="Close preview" type="button">×</button></div>
     <div class="preview-stage"><button id="image-prev" class="image-nav" aria-label="Previous saved image" type="button">‹</button><img id="preview" alt=""><button id="image-next" class="image-nav" aria-label="Next saved image" type="button">›</button></div>
     <div class="viewer-details"><span id="image-info"></span></div>
     <div id="filmstrip" class="filmstrip" aria-label="Saved images"></div>
     <section class="viewer-actions" aria-label="Image details and actions"><div class="action-buttons"><div id="viewer-saved-actions" hidden></div><a id="open-image" class="secondary" target="_blank" rel="noopener">Open image ↗</a><button id="download-image" class="secondary" type="button">Download image ↓</button><button id="reveal" class="secondary" type="button">Show in Explorer ↗</button><button id="find-similar" class="primary" type="button">Find similar ↗</button></div></section>
-    <section class="viewer-actions" aria-label="Game details and actions"><div><strong>Game</strong><p id="viewer-visits"></p><span id="metadata-date"></span></div></section>
     <p id="viewer-error" class="error" role="alert" hidden></p>
   </dialog>
 </body>

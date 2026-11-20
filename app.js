@@ -229,14 +229,13 @@ async function openGame(id, trigger, imageId) {
     const placeId = game.root_place_id;
     const hasGameLink = Number.isSafeInteger(placeId) && placeId > 0;
     $('game-page').hidden = !hasGameLink && !game.name;
-    $('game-page').textContent = hasGameLink ? 'Open game page ↗' : 'Find on Roblox ↗';
+    $('game-page').setAttribute('aria-label', hasGameLink ? 'Open game page' : 'Find on Roblox');
     if (hasGameLink) {
       $('game-page').href = `https://www.roblox.com/games/${placeId}`;
     } else {
       if (game.name) $('game-page').href = `https://www.roblox.com/discover/?Keyword=${encodeURIComponent(game.name)}`;
       else $('game-page').removeAttribute('href');
     }
-    $('metadata-date').textContent = game.fetched_at ? `Metadata retrieved ${game.fetched_at} UTC` : 'Metadata is still being collected.';
     $('viewer-error').hidden = true;
     $('filmstrip').replaceChildren(...selectedImages.map((image, index) => {
       const button = node('button');
