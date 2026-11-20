@@ -266,7 +266,6 @@ function showImage(index) {
   saved?.showImage(image.id);
   imageSource($('preview'), image.id);
   $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, saved image ${imageIndex + 1}`;
-  $('filename').textContent = image.filename;
   $('image-info').textContent = `${imageIndex + 1} / ${selectedImages.length} · Saved ${savedDate(image.captured)}`;
   imageSource($('open-image'), image.id);
   $('image-prev').disabled = $('image-next').disabled = selectedImages.length < 2;
@@ -371,6 +370,20 @@ $('image-next').addEventListener('click', () => showImage(imageIndex + 1));
 $('viewer').addEventListener('keydown', event => {
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); showImage(imageIndex + (event.key === 'ArrowLeft' ? -1 : 1)); }
 });
+$('download-image').addEventListener('click', async () => {
+  try {
+    const image = selectedImages[imageIndex];
+    const source = $('open-image').getAttribute('href');
+    if (!source) throw new Error('Image is not available yet. Please try again.');
+    const response = await fetch(source);
+    if (!response.ok) throw new Error('Could not download this image.');
+    const url = URL.createObjectURL(await response.blob());
+    const link = node('a');
+    link.href = url; link.download = image.filename; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $('viewer-error').hidden = true;
+  } catch (error) { $('viewer-error').textContent = error.message; $('viewer-error').hidden = false; }
+});
 $('reveal').addEventListener('click', async () => {
   try { await api(`/api/reveal/${selectedImages[imageIndex].id}`, {method: 'POST'}); }
   catch (error) { $('viewer-error').textContent = error.message; $('viewer-error').hidden = false; }
@@ -393,3 +406,4 @@ window.addEventListener('gallery:saved', () => { if (saved?.active) load(true); 
 $('daily-category')?.addEventListener('change', () => load(true));
 status();
 load();
+
