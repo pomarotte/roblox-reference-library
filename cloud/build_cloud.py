@@ -47,7 +47,7 @@ def build_cloud(output, extend=None, cache=GALLERY):
             '<option value="" selected>Full archive</option>'
             '<option value="new-images">New images for existing games</option>'
             '<option value="new-games">Newly indexed games</option></select></label>')
-        (output / 'daily.css').write_text('.daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
+        (output / 'daily.css').write_text('.daily-view { order: 1; } .daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
         html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')
 
