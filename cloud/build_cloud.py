@@ -46,7 +46,7 @@ def build_cloud(output, extend=None, cache=GALLERY):
             '<label class="sort-control daily-view">View<select id="daily-category">'
             '<option value="" selected>Full archive</option>'
             '<option value="new-images">New thumbnails for existing games</option>'
-            '<option value="new-games">Newly indexed games</option></select></label>')
+            '<option value="new-games">Newly added games</option></select></label>')
         (output / 'daily.css').write_text('.daily-view { margin-right: auto; } .toolbar .daily-view ~ .check-control { margin-right: 0; } .daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
         html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')
