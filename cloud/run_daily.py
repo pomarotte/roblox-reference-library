@@ -225,6 +225,12 @@ def publish(output, database, day, cache):
                 html = page.read_text(encoding='utf-8')
                 html = html.replace('id="last-updated" hidden', f'id="last-updated" data-time="{stamp.strftime("%H:%M")} UTC" hidden')
                 page.write_text(html, encoding='utf-8')
+        elif latest_day == '2026-11-19':
+            # The original indexing job completed at 18:49 UTC; individual capture times were not saved.
+            page = stage / 'index.html'
+            html = page.read_text(encoding='utf-8')
+            html = html.replace('id="last-updated" hidden', 'id="last-updated" data-time="around 18:49 UTC" hidden')
+            page.write_text(html, encoding='utf-8')
         for asset in stage.iterdir():
             if asset.is_dir():
                 shutil.copytree(asset, output / asset.name, dirs_exist_ok=True)
