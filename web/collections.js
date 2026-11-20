@@ -225,7 +225,7 @@ window.galleryCollections = (() => {
       const collection = active();
       if (!collection?.images.length || exportController) return;
       const filename = (collection.name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '') || 'Collection') + '.zip';
-      let writer;
+      let handle, writer;
       exportController = new AbortController();
       const signal = exportController.signal;
       el('zip-progress').hidden = false; el('cancel-zip').hidden = false; refresh();
@@ -235,12 +235,13 @@ window.galleryCollections = (() => {
       try {
         if (window.showSaveFilePicker) {
           try {
-            const handle = await window.showSaveFilePicker({suggestedName: filename, types: [{description: 'ZIP archive', accept: {'application/zip': ['.zip']}}]});
-            writer = await handle.createWritable();
+            handle = await window.showSaveFilePicker({suggestedName: filename, types: [{description: 'ZIP archive', accept: {'application/zip': ['.zip']}}]});
           } catch (error) { if (!['SecurityError', 'TypeError'].includes(error.name)) throw error; }
         }
         const entries = [];
         let bytes = 0;
+        const fallbackLimit = 512 * 1024 * 1024;
+        const fallbackError = 'For ZIPs over 512 MB, use desktop Chrome or Edge with the file-save picker, or split this collection.';
         for (const id of collection.images) {
           signal.throwIfAborted();
           const image = getImage(id);
@@ -248,9 +249,17 @@ window.galleryCollections = (() => {
           const file = await getFile(id);
           bytes += file.size;
           // shortcut: bound memory for browsers without a streaming file picker.
-          if (!writer && bytes > 512 * 1024 * 1024) throw new Error('For ZIPs over 512 MB, use desktop Chrome or Edge with the file-save picker, or split this collection.');
+          if (!handle && bytes > fallbackLimit) throw new Error(fallbackError);
           entries.push({name: image.filename, file});
           progress(entries.length, collection.images.length);
+        }
+        signal.throwIfAborted();
+        if (handle) {
+          try { writer = await handle.createWritable(); }
+          catch (error) {
+            if (!['SecurityError', 'TypeError'].includes(error.name)) throw error;
+            if (bytes > fallbackLimit) throw new Error(fallbackError);
+          }
         }
         const chunks = [];
         await writeZip(entries, writer || {write: bytes => chunks.push(bytes)}, progress, signal);

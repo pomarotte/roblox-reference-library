@@ -31,8 +31,15 @@
     return new URL(path, imageOrigin).href;
   }
   async function imageFile(id) {
-    const response = await fetch(imageURL(id));
-    if (!response.ok) throw new Error('Image download failed. Please retry.');
+    const url = imageURL(id);
+    let response;
+    try {
+      // Keep ZIP fetches separate from cached preview responses without CORS headers.
+      response = await fetch(`${url}?download=1`);
+    } catch (error) {
+      throw new Error(`Could not fetch "${images.get(id).filename}" from rolibrary.win. Check your connection or try again.`, {cause: error});
+    }
+    if (!response.ok) throw new Error(`Could not download "${images.get(id).filename}" (HTTP ${response.status}).`);
     return response.blob();
   }
   const ready = rpc('init').then(async data => {

@@ -68,4 +68,44 @@ await assert.rejects(() => writeZip([{name: '../unsafe', file: new Blob()}], {wr
 await assert.rejects(() => writeZip([{name: 'huge', file: {size: 0xffffffff}}], {write() {}}), /too large/);
 await assert.rejects(() => writeZip(files, {write() {}}, () => {}, AbortSignal.abort()), {name: 'AbortError'});
 await assert.rejects(() => writeZip(files, {write() {throw new Error('Disk full');}}), /Disk full/);
+
+values.set(storageKey, JSON.stringify({version: 1, favorites: [2], collections: []}));
+const nodes = new Map();
+const element = () => ({children: [], dataset: {}, append() {}, setAttribute() {}, replaceChildren() {},
+  addEventListener(type, handler) { this[type] = handler; }});
+globalThis.localStorage = storage;
+globalThis.Option = class {};
+globalThis.document = {
+  getElementById(id) {
+    if (!nodes.has(id)) nodes.set(id, element());
+    return nodes.get(id);
+  },
+  createElement: element,
+  querySelectorAll: () => []
+};
+window.addEventListener = () => {};
+window.dispatchEvent = () => {};
+let opened = 0, saved = false, fetchFails = true;
+window.showSaveFilePicker = async () => ({
+  createWritable() {
+    opened++;
+    return {write() {}, close() { saved = true; }};
+  }
+});
+window.galleryCollections.initialize({
+  getImage: () => ({filename: 'saved.webp'}),
+  getFile() {
+    if (fetchFails) throw new TypeError('Failed to fetch');
+    return new Blob(['image']);
+  }
+});
+nodes.get('saved-view').value = 'favorites';
+nodes.get('saved-view').change();
+await nodes.get('download-collection').click();
+assert.equal(nodes.get('saved-error').textContent, 'Failed to fetch');
+assert.equal(opened, 0);
+fetchFails = false;
+await nodes.get('download-collection').click();
+assert.equal(opened, 1);
+assert.equal(saved, true);
 console.log('Collection persistence, exact image membership, storage failures, ZIP integrity/UTF-8/binary files, bounds, cancellation, and write errors passed.');

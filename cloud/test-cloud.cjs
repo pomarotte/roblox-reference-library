@@ -12,7 +12,11 @@ class Worker {
   }
 }
 const window = {galleryCollections: {initialize(options) { savedOptions = options; return {}; }}};
-const context = {window, Worker, Map, URL, DOMException, queueMicrotask, document: {getElementById() { return lastUpdated; }}, fetch: async url => ({ok: true, blob: async () => ({url})})};
+let fetchError;
+const context = {window, Worker, Map, URL, DOMException, queueMicrotask, document: {getElementById() { return lastUpdated; }}, fetch: async url => {
+  if (fetchError) throw fetchError;
+  return {ok: true, blob: async () => ({url})};
+}};
 vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
 (async () => {
   const status = await window.galleryHost.api('/api/status');
@@ -23,7 +27,9 @@ vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
   const image = {tagName: 'IMG'};
   window.galleryHost.imageSource(image, 3);
   assert.equal(image.src, 'https://rolibrary.win/thumbs/7%20test.webp');
-  assert.equal((await savedOptions.getFile(3)).url, image.src);
+  assert.equal((await savedOptions.getFile(3)).url, `${image.src}?download=1`);
+  fetchError = new TypeError('Failed to fetch');
+  await assert.rejects(() => savedOptions.getFile(3), /7 test\.webp.*rolibrary\.win/);
   await assert.rejects(() => savedOptions.getFile(999), /unavailable/);
   assert.equal((await window.galleryHost.api('/api/library?kind=thumbs')).total, 1);
   console.log('Cloud catalogue initialization, image URLs, collection fetch, and search routing passed.');
