@@ -41,9 +41,9 @@ def capture(script, state, limit):
         db.execute('CREATE TABLE IF NOT EXISTS metadata (universe_id INTEGER PRIMARY KEY, genre TEXT, subgenre TEXT)')
         sorts = collector.request_json(module.ROBLOX + '/explore-api/v1/get-sorts',
                                        {'sessionId': collector.session_id, 'device': 'computer', 'country': 'all'})
-        ids = set()
+        ids = module.extract_universe_ids(sorts)
         for sort in sorts['sorts']:
-            if not sort.get('sortDisplayName') or not sort.get('sortId'):
+            if not sort.get('sortId'):
                 continue
             content = collector.request_json(module.ROBLOX + '/explore-api/v1/get-sort-content',
                 {'sessionId': collector.session_id, 'device': 'computer', 'country': 'all', 'sortId': sort['sortId']})

@@ -8,12 +8,12 @@ Run `python build_cloud.py` to build `dist/`, and `node test-cloud.cjs` for the 
 The build currently depends on the adjacent `roblox-gallery` folder and its saved database
 and visual index.
 
-The Pages workflow serves this gallery at `/cloud/`. It runs daily at 13:47 UTC and can also run
+The Pages workflow serves this gallery at `/cloud/`. It runs at 05:47, 13:47, and 21:47 UTC and can also run
 from the Actions tab. For unattended uploads, set the repository's `R2_ACCESS_KEY_ID` and
 `R2_SECRET_ACCESS_KEY` Actions secrets to credentials scoped to `roblox-thumbnails`.
 The job runs on GitHub. The historical gallery is available before credentials are configured.
 
-The job checks named public Roblox charts, uploads new image bytes under content-addressed
+The job checks the public charts returned by Roblox, uploads new image bytes under content-addressed
 `daily/` keys, and embeds each new file once with the historical CLIP model. It preserves
 historical image IDs and stores daily game-image associations separately, including shared images.
 The View menu shows new images for existing games, games added for the first time, or the full archive.
