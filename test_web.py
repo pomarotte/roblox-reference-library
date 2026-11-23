@@ -10,6 +10,7 @@ from unittest.mock import patch
 import numpy as np
 from build_web import build
 from cloud.build_cloud import build_cloud
+from cloud.charts import make_charts
 
 
 class WebExportTests(unittest.TestCase):
@@ -40,6 +41,9 @@ class WebExportTests(unittest.TestCase):
             self.assertEqual(len(list((output / 'character-references').iterdir())), 6)
             self.assertIn('id="thumbnail-upload"', generator_html)
             self.assertIn('id="thumbnail-collection"', generator_html)
+            self.assertIn('id="thumbnail-game-url"', generator_html)
+            self.assertIn('id="thumbnail-allow-text"', generator_html)
+            self.assertIn('https://references.rolibrary.win', generator_html)
             self.assertNotIn('BMC-Widget', generator_html)
             generator = next(output.glob('thumbnail-generator.*.js'))
             prompt = next(output.glob('thumbnail-prompt.*.txt'))
@@ -70,10 +74,21 @@ class WebExportTests(unittest.TestCase):
                 with patch.dict('os.environ', GITHUB_SHA=commit):
                     build_cloud(cloud_output, cache=root)
                 cloud_html = (cloud_output / 'index.html').read_text(encoding='utf-8')
+                self.assertIn('type="button">Top 100 charts</button>', cloud_html)
                 self.assertIn(f'id="last-updated" hidden></span><span id="site-version">Site version {commit[:12]}</span>', cloud_html)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))
             with self.assertRaisesRegex(ValueError,'every image'):
                 build(root,output)
+
+    def test_charts_rank_genres_and_subgenres_independently(self):
+        games = [dict(id=i, rootPlaceId=i, name=f'Game {i}', genre_l1='Simulation',
+                      genre_l2='Tycoon' if i < 3 else 'Idle', playing=i) for i in range(1, 105)]
+        games.append(dict(games[0], id=105, rootPlaceId=105, playing=2))
+        games.append(dict(games[0], id=106, rootPlaceId=106, playing=None))
+        charts = make_charts(games)
+        self.assertEqual([row['place'] for row in charts['Simulation']['games']], list(range(104, 4, -1)))
+        self.assertEqual([row['place'] for row in charts['Simulation']['subgenres']['Tycoon']], [2, 105, 1])
+        self.assertEqual(charts['Education']['games'], [])
 
 
 if __name__ == '__main__':

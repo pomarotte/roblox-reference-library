@@ -306,7 +306,18 @@ window.galleryCollections = (() => {
         collect.addEventListener('click', () => addToCollection(currentImage()));
         favorite.addEventListener('pointerenter', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
         favorite.addEventListener('focus', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
-        actions.append(favorite, collect); wrapper.append(button, actions); return wrapper;
+        actions.append(favorite, collect);
+        if (view && view !== 'favorites' && active()?.images.includes(game.image_id)) {
+          const collectionId = view, remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'remove-from-collection';
+          remove.textContent = '×';
+          remove.title = 'Remove from collection';
+          remove.setAttribute('aria-label', `Remove image from ${active().name}`);
+          remove.addEventListener('click', () => attempt(() => store.include(collectionId, game.image_id, false)));
+          actions.append(remove);
+        }
+        wrapper.append(button, actions); return wrapper;
       }
     };
   }

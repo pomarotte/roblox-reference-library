@@ -5,8 +5,7 @@ Each user-selected reference image is immediately preceded by a description of t
 
 Render the complete scene in a coherent visual style. Apply the selected visual-style references across characters, creatures, objects and backgrounds, maintaining consistent materials, lighting, detail, and edge treatment. Unless the user explicitly requests illustration or selects an illustrated Visual style reference, render characters as stylized 3D Roblox GFX: solid block geometry, visible depth, and rendered material shading. Preserve any requested or reference character design in that rendering. Composition, Lighting, and Colors references do not set the rendering medium, even if they are drawn. Do not add unrelated characters, actions, or objects.
 
-NO TEXT
-The output must contain no text of any kind, even if text is present in a reference or requested in the scene description. Do not render titles, captions, letters, numbers, logos, watermarks, labels, signage, or text on clothing, posters, screens, or objects. Replace any reference text with clean, unmarked surfaces. Tell the story through the scene and expression alone.
+Follow the text settings in the request. A Text style reference supplies typography, and the text settings specify what wording may appear.
 
 COMPOSITION
 Preserve the camera viewpoint of the primary Composition reference unless the scene description explicitly requests a different viewpoint. Identify whether it is first person, third person, or another view before composing. For first person, place the camera at the player’s eyes and frame what the player sees. Show only their hands, arms, or equipment where visible in the reference; do not show the player’s head, hair, back, or full body. Mentioning the player or describing their appearance does not request a third-person view. Keep the reference’s foreground placement, horizon and vanishing point as appropriate to the new scene.

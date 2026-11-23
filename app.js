@@ -33,6 +33,57 @@ function options(select, values, label) {
   select.replaceChildren(new Option(label, ''), ...values.map(value => new Option(value, value)));
   if (values.includes(previous)) select.value = previous;
 }
+
+const chartsButton = $('open-charts');
+if (chartsButton && !chartsButton.hidden) {
+  const dialog = $('charts-dialog'), genre = $('chart-genre'), subgenre = $('chart-subgenre');
+  const status = $('chart-status'), results = $('chart-results');
+  let snapshot, loading = false;
+  function showChart() {
+    const chart = snapshot.genres[genre.value];
+    const games = subgenre.value ? chart.subgenres[subgenre.value] : chart.games;
+    const updated = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(snapshot.updated));
+    status.textContent = games.length ? `${format.format(games.length)} games · Updated ${updated}` : `No ranked games in this category · Updated ${updated}`;
+    results.replaceChildren(...games.map(game => {
+      const row = node('li'), link = node('a', '', game.name);
+      link.href = `https://www.roblox.com/games/${game.place}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      row.append(link, node('span', '', `${format.format(game.players)} playing`));
+      return row;
+    }));
+  }
+  function selectGenre() {
+    const names = Object.keys(snapshot.genres[genre.value].subgenres).sort();
+    subgenre.value = '';
+    options(subgenre, names, 'All subgenres');
+    subgenre.disabled = !names.length;
+    showChart();
+  }
+  genre.addEventListener('change', selectGenre);
+  subgenre.addEventListener('change', showChart);
+  $('close-charts').addEventListener('click', () => dialog.close());
+  chartsButton.addEventListener('click', async () => {
+    dialog.showModal();
+    if (snapshot || loading) return;
+    loading = true;
+    status.textContent = 'Loading charts…';
+    try {
+      const response = await fetch('./data/charts.json');
+      if (!response.ok) throw new Error('Chart snapshot unavailable');
+      snapshot = await response.json();
+      genre.replaceChildren(...Object.keys(snapshot.genres).sort().map(name => new Option(name, name)));
+      genre.value = 'Simulation';
+      genre.disabled = false;
+      selectGenre();
+    } catch {
+      snapshot = undefined;
+      genre.disabled = subgenre.disabled = true;
+      status.textContent = 'Charts are unavailable. Close and reopen to try again.';
+    } finally { loading = false; }
+  });
+}
+
 function updateSubgenres() {
   const values = [...new Set(facets.filter(f => !$('genre').value || f.genre === $('genre').value).map(f => f.subgenre))].sort();
   options($('subgenre'), values, 'All subgenres');
@@ -131,7 +182,7 @@ function card(game) {
   const root = saved ? saved.card(button, game, () => displayedImageId) : button;
   async function cycle() {
     stopHover();
-    if (game.similarity_score !== undefined || saved?.active || dailyCategory() === 'new-images') return;
+    if ($('all-images').checked || game.similarity_score !== undefined || saved?.active || dailyCategory() === 'new-images') return;
     if (game.image_count < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const token = ++hoverGeneration;
     let timer;

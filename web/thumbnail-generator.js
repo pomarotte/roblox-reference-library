@@ -2,13 +2,17 @@
 (() => {
   const $ = id => document.getElementById(id);
   const references = new Map();
+  const gameThumbnailApi = 'https://references.rolibrary.win/roblox-thumbnails';
   const tagDescriptions = {
     'Visual style': 'rendering technique, textures, level of realism, and outlines',
     'Composition': 'framing, camera viewpoint (first person or third person), camera angle, subject placement, scale, and layout',
     'Environment': 'setting, background, and environmental details',
     'Character': 'the exact subject identity, silhouette, anatomy, head and face, distinctive features, clothing, and colors; replace subjects from other references with this character',
     'Lighting': 'match exposure and brightness, light sources and direction, shadow depth, and contrast; preserve a dark image as dark',
-    'Colors': 'match dominant hues, saturation, darkness, and overall color balance; do not brighten or add unrelated colors'
+    'Colors': 'match dominant hues, saturation, darkness, and overall color balance; do not brighten or add unrelated colors',
+    'Object': 'include the referenced prop or vehicle and preserve its recognizable shape, materials and details',
+    'Logo': 'place the referenced logo in the thumbnail, preserving its shape and identity; use only its graphic mark when text is disabled',
+    'Text style': 'when text is enabled, use the typeface, weight, color, outline and effects as inspiration for the requested wording'
   };
   let resultUrl, uploadId = 0, collections = [];
   const host = window.galleryHost;
@@ -38,6 +42,9 @@
 
   const picker = $('thumbnail-collection');
   const grid = $('thumbnail-collection-images');
+  const gameGrid = $('thumbnail-game-images');
+  const allowText = $('thumbnail-allow-text');
+  allowText.addEventListener('change', () => { $('thumbnail-wording-field').hidden = !allowText.checked; });
   const previewObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -53,6 +60,9 @@
     for (const tile of grid.children) {
       tile.setAttribute('aria-pressed', String(references.has(Number(tile.dataset.imageId))));
     }
+    for (const tile of gameGrid.children) {
+      tile.setAttribute('aria-pressed', String(references.has(tile.dataset.referenceId)));
+    }
     $('thumbnail-references').replaceChildren();
     for (const [id, reference] of references) {
       const {name, tags} = reference;
@@ -61,7 +71,9 @@
       const image = document.createElement('img');
       image.className = 'thumbnail-reference-preview';
       image.alt = `Selected reference: ${name}`;
-      if (reference.file) {
+      if (reference.url) {
+        image.src = reference.url;
+      } else if (reference.file) {
         if (!reference.previewUrl) reference.previewUrl = URL.createObjectURL(reference.file);
         image.src = reference.previewUrl;
       } else {
@@ -105,6 +117,18 @@
     }
   }
 
+  function toggleReference(id, reference) {
+    const status = $('thumbnail-status');
+    if (references.has(id)) references.delete(id);
+    else if (references.size < 5) references.set(id, reference);
+    else {
+      status.textContent = 'Remove a reference before adding another. The limit is five.';
+      return;
+    }
+    status.textContent = '';
+    update();
+  }
+
   function showCollection() {
     previewObserver.disconnect();
     grid.replaceChildren();
@@ -121,17 +145,7 @@
       tile.setAttribute('aria-label', name);
       image.alt = '';
       tile.append(image);
-      tile.addEventListener('click', () => {
-        const status = $('thumbnail-status');
-        if (references.has(id)) references.delete(id);
-        else if (references.size < 5) references.set(id, {name, tags: new Set(['Visual style', 'Composition'])});
-        else {
-          status.textContent = 'Remove a reference before adding another. The limit is five.';
-          return;
-        }
-        status.textContent = '';
-        update();
-      });
+      tile.addEventListener('click', () => toggleReference(id, {name, tags: new Set(['Visual style', 'Composition'])}));
       grid.append(tile);
       previewObserver.observe(image);
     }
@@ -162,6 +176,46 @@
   }
 
   picker.addEventListener('change', showCollection);
+  $('thumbnail-game-url').addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    $('thumbnail-load-game').click();
+  });
+  $('thumbnail-load-game').addEventListener('click', async () => {
+    const button = $('thumbnail-load-game'), status = $('thumbnail-game-status');
+    let link;
+    try { link = new URL($('thumbnail-game-url').value.trim()); } catch {}
+    const place = link?.pathname.match(/^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?games\/([1-9]\d{0,19})(?:\/|$)/i)?.[1];
+    if (!place || link.protocol !== 'https:' || !['roblox.com', 'www.roblox.com'].includes(link.host)) {
+      status.textContent = 'Paste a Roblox game page link, such as https://www.roblox.com/games/12345.';
+      return;
+    }
+    button.disabled = true;
+    gameGrid.replaceChildren();
+    status.textContent = 'Loading Roblox thumbnails…';
+    try {
+      const response = await fetch(`${gameThumbnailApi}?place=${place}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Roblox thumbnails are unavailable.');
+      gameGrid.replaceChildren(...data.thumbnails.map((url, index) => {
+        const tile = document.createElement('button'), image = document.createElement('img');
+        const name = `Roblox thumbnail ${index + 1} (place ${place})`;
+        tile.type = 'button';
+        tile.dataset.referenceId = url;
+        tile.setAttribute('aria-label', name);
+        image.alt = '';
+        image.src = url;
+        image.loading = 'lazy';
+        tile.append(image);
+        tile.addEventListener('click', () => toggleReference(url, {name, url, tags: new Set(['Visual style', 'Composition'])}));
+        return tile;
+      }));
+      update();
+      status.textContent = data.thumbnails.length ? 'Select thumbnails to use as temporary references.' : 'Roblox returned no available thumbnails for this game.';
+    } catch (error) {
+      status.textContent = error instanceof TypeError || error instanceof SyntaxError ? 'Could not load Roblox thumbnails. Try again later.' : error.message;
+    } finally { button.disabled = false; }
+  });
   window.addEventListener('gallery:connected', () => {
     if ($('thumbnail-dialog').open) showCollection();
   });
@@ -190,18 +244,40 @@
       reader.readAsDataURL(file);
     });
   }
+  async function exportThumbnail(blob, width, height) {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const scale = Math.max(width / bitmap.width, height / bitmap.height);
+      const drawnWidth = bitmap.width * scale, drawnHeight = bitmap.height * scale;
+      canvas.getContext('2d').drawImage(bitmap, (width - drawnWidth) / 2, (height - drawnHeight) / 2, drawnWidth, drawnHeight);
+      return await new Promise((resolve, reject) => canvas.toBlob(file => {
+        if (file) resolve(file);
+        else reject(new Error('Could not prepare the thumbnail for download.'));
+      }, 'image/png'));
+    } finally { bitmap.close(); }
+  }
   $('thumbnail-form').addEventListener('submit', async event => {
     event.preventDefault();
     const button = $('thumbnail-generate'), status = $('thumbnail-status');
     const key = keyInput.value.trim();
     const imageSize = $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
+    const [width, height] = imageSize === '1K' ? [960, 540] : [1920, 1080];
+    const textEnabled = allowText.checked;
+    const wording = $('thumbnail-wording').value.trim();
     if (!key || !$('thumbnail-concept').value.trim()) { status.textContent = 'Enter an API key and thumbnail description.'; return; }
     button.disabled = true; status.textContent = 'Generating thumbnail…';
     try {
       const promptResponse = await fetch('./thumbnail-prompt.txt');
       if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
       const prompt = await promptResponse.text();
-      const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}`}];
+      const textInstruction = textEnabled
+        ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
+          : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
+        : 'Do not render any text, letters, numbers, signage or watermarks, even if requested in the scene description or shown in references. A selected logo may contribute its graphic mark only.';
+      const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}\n\nTEXT SETTINGS:\n${textInstruction}`}];
       const selected = [...references].map(([id, reference]) => [id, {...reference, tags: new Set(reference.tags)}]);
       if (selected.some(([, reference]) => !reference.tags.size)) {
         throw new Error('Choose at least one tag for each reference image.');
@@ -216,7 +292,14 @@
         parts.push({text: 'Use the first attached image as the subject to restage in the requested thumbnail. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position.'});
       }
       for (const [index, [id, reference]] of ordered.entries()) {
-        const file = reference.file || await host.imageFile(id);
+        let file = reference.file;
+        if (reference.url) {
+          const response = await fetch(reference.url, {cache: 'no-store'});
+          if (!response.ok) throw new Error('Could not download a Roblox reference. Reload the game thumbnails and try again.');
+          const downloaded = await response.blob();
+          file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
+        }
+        if (!file) file = await host.imageFile(id);
         if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
         const dataUrl = await asDataUrl(file);
         const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
@@ -224,7 +307,7 @@
         const instructions = Object.keys(tagDescriptions)
           .filter(tag => reference.tags.has(tag))
           .map(tag => `${tag}: ${tagDescriptions[tag]}`);
-        parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Do not copy text or lettering.`});
+        parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Follow the text settings above.`});
         parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
       if (!hasCharacter) {
@@ -257,7 +340,7 @@
       }
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
         method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
-        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: $('thumbnail-aspect').value, imageSize}}})
+        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize}}})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message || `Google returned error ${response.status}.`);
@@ -265,11 +348,12 @@
         .find(part => !part.thought && part.inlineData?.data)?.inlineData;
       if (!image) throw new Error('Google did not return an image. Try adjusting your description or references.');
       const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
+      const exported = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      resultUrl = URL.createObjectURL(new Blob([bytes], {type: image.mimeType || 'image/png'}));
+      resultUrl = URL.createObjectURL(exported);
       $('thumbnail-result').src = resultUrl; $('thumbnail-result').hidden = false;
       $('thumbnail-download').href = resultUrl; $('thumbnail-download').hidden = false;
-      status.textContent = 'Thumbnail ready.';
+      status.textContent = `Thumbnail ready · ${width} × ${height}`;
     } catch (error) { status.textContent = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message; }
     finally { button.disabled = false; }
   });

@@ -8,7 +8,18 @@ function element(id) {
 }
 const calls = [];
 class Reader { readAsDataURL(file) { this.result = `data:${file.type};base64,YQ==`; this.onload(); } }
-const document = {getElementById: element, createElement: () => element(Symbol())};
+const exportsMade = [];
+const document = {getElementById: element, createElement: tag => {
+  if (tag !== 'canvas') return element(Symbol());
+  const canvas = {
+    getContext: () => ({drawImage: (image, ...rectangle) => { canvas.rectangle = rectangle; }}),
+    toBlob: (callback, type) => {
+      exportsMade.push({width: canvas.width, height: canvas.height, rectangle: canvas.rectangle, type});
+      callback(new Blob(['output'], {type}));
+    }
+  };
+  return canvas;
+}};
 const storage = new Map([['rolibrary-gemini-api-key', 'previous-key']]);
 let finishCatalogue;
 const ready = new Promise(resolve => { finishCatalogue = resolve; });
@@ -36,9 +47,19 @@ class IntersectionObserver {
   disconnect() {}
 }
 class Option {constructor(label, value) {Object.assign(this, {label, value});}}
-const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: {createObjectURL: () => 'blob:result', revokeObjectURL() {}}, fetch: async (url, options) => {
+const gameImage = 'https://tr.rbxcdn.com/test/768/432/Image/Webp/noFilter';
+const lookupRequests = [];
+const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
+  static createObjectURL() { return 'blob:result'; }
+  static revokeObjectURL() {}
+}, createImageBitmap: async () => ({width: 1920, height: 1088, close() {}}), fetch: async (url, options) => {
   if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => 'background prompt'};
   if (!options && url.includes('character-references')) return {ok: true, blob: async () => ({type: url.endsWith('.png') ? 'image/png' : 'image/jpeg'})};
+  if (url.startsWith('https://references.rolibrary.win/')) {
+    lookupRequests.push(url);
+    return {ok: true, json: async () => ({thumbnails: [gameImage]})};
+  }
+  if (url === gameImage) return {ok: true, blob: async () => new Blob(['webp'], {type: 'image/webp'})};
   assert.match(url, /^https:\/\/generativelanguage\.googleapis\.com\//);
   assert.equal(options.headers['x-goog-api-key'], 'key');
   calls.push(JSON.parse(options.body));
@@ -121,7 +142,9 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(finalInstructions, /replace characters from composition or style images/);
   assert.match(finalInstructions, /match the overall brightness and contrast of the Colors image/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
-  assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready.');
+  assert.match(background.text, /Do not render any text/);
+  assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready · 1920 × 1080');
+  assert.deepEqual(exportsMade[0], {width: 1920, height: 1080, rectangle: [0, -4, 1920, 1088], type: 'image/png'});
   selectedRows[1].children[0].children[1].handlers.click();
   element('thumbnail-resolution').value = '1K';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
@@ -129,9 +152,37 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls[1].generationConfig.imageConfig.imageSize, '1K');
   assert.equal(calls[1].contents[0].parts.filter(part => part.inlineData).length, 7);
   assert.match(calls[1].contents[0].parts[3].text, /character reference sheets/);
+  assert.deepEqual(exportsMade[1], {width: 960, height: 540, rectangle: [0, -2, 960, 544], type: 'image/png'});
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   element('thumbnail-upload').handlers.change({target: {files: Array(5).fill(file), value: 'selected'}});
   assert.match(element('thumbnail-status').textContent, /up to 5/);
   assert.equal(element('thumbnail-count').textContent, '(2)');
-  console.log('Collection selection, temporary uploads, and the Gemini request passed.');
+  const gameLink = element('thumbnail-game-url'), gameLookup = element('thumbnail-load-game');
+  gameLink.value = 'https://roblox.com.example/games/123';
+  await gameLookup.handlers.click();
+  assert.equal(lookupRequests.length, 0);
+  gameLink.value = 'https://www.roblox.com/games/123/Example';
+  await gameLookup.handlers.click();
+  assert.match(lookupRequests[0], /\?place=123$/);
+  const gameTile = element('thumbnail-game-images').children[0];
+  gameTile.handlers.click();
+  assert.equal(gameTile.attributes['aria-pressed'], 'true');
+  const tags = element('thumbnail-references').children[2].children[1].children;
+  for (const tag of tags.slice(-3)) {
+    tag.children[0].checked = true;
+    tag.children[0].handlers.change();
+  }
+  const allow = element('thumbnail-allow-text');
+  allow.checked = true;
+  allow.handlers.change();
+  assert.equal(element('thumbnail-wording-field').hidden, false);
+  element('thumbnail-wording').value = 'Race Night!';
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  const parts = calls[2].contents[0].parts;
+  assert.match(parts[0].text, /exact text.*"Race Night!"/);
+  const gameReference = parts.findIndex(part => part.text?.includes('Roblox thumbnail 1'));
+  assert.match(parts[gameReference].text, /Object: .*Logo: .*Text style: /);
+  assert.equal(parts[gameReference + 1].inlineData.mimeType, 'image/webp');
+  assert.deepEqual([...storage], [['rolibrary-gemini-api-key', 'key']]);
+  console.log('Temporary references, text settings, and exact PNG export passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -1,0 +1,5 @@
+name = "rolibrary-thumbnail-references"
+main = "reference-worker.mjs"
+compatibility_date = "2026-11-23"
+workers_dev = false
+routes = [{ pattern = "references.rolibrary.win", custom_domain = true }]

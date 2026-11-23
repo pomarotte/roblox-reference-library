@@ -29,6 +29,9 @@ jobs:
       - run: python -m pip install numpy==2.3.5
       - run: node web/test-web.mjs
       - run: node web/test-collections.mjs
+      - run: node web/test-thumbnail-generator.cjs
+      - run: node cloud/test-reference-worker.mjs
+      - run: python -m unittest test_web
       - name: Prepare both galleries
         run: |
           python - <<'PY'
@@ -109,6 +112,8 @@ jobs:
           path: ${{ runner.temp }}/daily/dataset.sqlite3
           retention-days: 90
           overwrite: true
+      - name: Publish genre and subgenre charts
+        run: python -u cloud/charts.py --archive "$RUNNER_TEMP/library.sqlite3" --daily "$RUNNER_TEMP/daily/dataset.sqlite3" --output .web-build/cloud/data/charts.json
       - name: Set up gallery routes
         run: |
           python - <<'PY'

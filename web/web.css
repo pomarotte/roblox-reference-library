@@ -44,3 +44,16 @@
 #thumbnail-form .thumbnail-reference-tags input { width: auto; margin: 0; }
 
 .thumbnail-reference-preview { display: block; width: 150px; max-width: 65%; height: 85px; object-fit: contain; background: #111; border-radius: 6px; }
+.thumbnail-game-lookup { display: flex; flex-wrap: wrap; gap: 8px; }
+#thumbnail-form .thumbnail-game-lookup input { flex: 1; min-width: 180px; }
+#thumbnail-form .check-control input { width: auto; }
+.card-save-actions .remove-from-collection { padding: 0; }
+#charts-dialog { width: min(680px, calc(100vw - 24px)); }
+.chart-content { padding: 0 20px 20px; }
+.chart-filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.chart-filters label { flex: 1 1 200px; }
+.chart-filters select { display: block; width: 100%; margin-top: 4px; }
+#chart-results { padding-inline-start: 32px; }
+#chart-results li { border-bottom: 1px solid #393939; padding: 8px 0; }
+#chart-results a { color: var(--ink); }
+#chart-results li span { margin-inline-start: 10px; color: var(--muted); white-space: nowrap; }

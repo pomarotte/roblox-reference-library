@@ -35,7 +35,7 @@
     <div class="collection"><strong id="collection-count">Indexing…</strong><span id="collection-games">Reading local images</span><details class="contact"><summary>Contact me</summary><a href="https://www.roblox.com/users/48069218/profile" target="_blank" rel="noopener noreferrer">Roblox ↗</a><a href="https://discord.com/users/158335089913233408" target="_blank" rel="noopener noreferrer">Discord ↗</a></details><button id="quit" class="text-button" type="button">Stop gallery</button></div>
   </aside>
   <main>
-    <header class="page-heading"><h2 id="explore-title">Explore Thumbnails</h2></header>
+    <header class="page-heading"><h2 id="explore-title">Explore Thumbnails</h2><button id="open-charts" class="secondary" type="button" hidden>Top 100 charts</button></header>
     <section class="sync-panel" aria-label="Metadata collection"><div class="sync-copy"><strong id="sync-title">Connecting the dots</strong><span id="sync-message">Loading library information…</span><progress id="sync-progress" max="1" value="0" aria-label="Games with metadata"></progress></div><button id="sync-button" class="secondary" type="button">Resume metadata</button></section>
     <section class="visual-panel" aria-label="Visual indexing"><div><strong id="visual-title">Preparing visual search</strong><span id="visual-message">Loading image-index information…</span></div><progress id="visual-progress" max="1" value="0" aria-label="Images visually indexed"></progress><button id="visual-button" class="secondary" type="button">Resume visual index</button></section>
     <section id="similarity-panel" class="similarity-panel" aria-label="Similarity reference" hidden><img id="reference-image" alt="Selected similarity reference"><div class="reference-copy"><span class="eyebrow">FINDING SIMILAR TO</span><strong id="reference-name"></strong></div><button id="clear-similarity" class="text-button" type="button">Exit similarity ×</button></section>
@@ -47,6 +47,15 @@
     <div id="empty" class="empty" hidden><span>↗</span><h3>No games in this view.</h3><p>Try a broader genre, fewer words, or a wider visit range.<br>Games still waiting for metadata appear when no metadata filters are applied.</p></div>
     <nav class="pagination" aria-label="Result pages"><button id="previous" class="secondary" type="button" disabled>← Previous</button><span id="page-label">Page 1</span><button id="next" class="secondary" type="button" disabled>Next →</button></nav>
   </main>
+  <dialog id="charts-dialog" aria-labelledby="charts-title">
+    <div class="viewer-header"><h2 id="charts-title">Top 100 charts</h2><button id="close-charts" class="close-button" type="button" aria-label="Close charts">×</button></div>
+    <div class="chart-content">
+      <p>Ranked by concurrent players across Roblox’s public charts and games tracked by RoLibrary.</p>
+      <div class="chart-filters"><label for="chart-genre">Genre<select id="chart-genre" disabled></select></label><label for="chart-subgenre">Subgenre<select id="chart-subgenre" disabled></select></label></div>
+      <p id="chart-status" role="status"></p>
+      <ol id="chart-results"></ol>
+    </div>
+  </dialog>
   <dialog id="viewer" aria-labelledby="viewer-title">
     <div class="viewer-header"><div><span class="eyebrow" id="viewer-genre"></span><div class="viewer-title-row"><h2 id="viewer-title">Game preview</h2><a id="game-page" class="secondary" target="_blank" rel="noopener noreferrer" aria-label="Open game page" hidden>↗</a></div><p id="viewer-visits" class="viewer-visits"></p></div><button id="close-viewer" class="close-button" aria-label="Close preview" type="button">×</button></div>
     <div class="preview-stage"><button id="image-prev" class="image-nav" aria-label="Previous saved image" type="button">‹</button><img id="preview" alt=""><button id="image-next" class="image-nav" aria-label="Next saved image" type="button">›</button></div>
