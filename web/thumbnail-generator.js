@@ -2,33 +2,94 @@
 (() => {
   const $ = id => document.getElementById(id);
   const references = new Map();
-  let current, resultUrl, uploadId = 0;
-  const add = $('thumbnail-add');
-  add.hidden = false;
+  let resultUrl, uploadId = 0, collections = [];
+  const host = window.galleryHost;
+  const picker = $('thumbnail-collection');
+  const grid = $('thumbnail-collection-images');
+  const previewObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      previewObserver.unobserve(entry.target);
+      host.imageSource(entry.target, Number(entry.target.dataset.imageId));
+    }
+  });
+
   function update() {
-    $('thumbnail-count').textContent = `(${references.size} reference${references.size === 1 ? '' : 's'})`;
-    add.textContent = current && references.has(current.id) ? 'Remove reference' : 'Add as reference';
+    const count = `${references.size} of 5 references selected`;
+    $('thumbnail-count').textContent = `(${references.size})`;
+    $('thumbnail-selected-count').textContent = count;
+    for (const tile of grid.children) {
+      tile.setAttribute('aria-pressed', String(references.has(Number(tile.dataset.imageId))));
+    }
     $('thumbnail-references').replaceChildren();
-    for (const [id, reference] of references) {
-      const name = reference.name;
+    for (const [id, {name}] of references) {
       const row = document.createElement('div');
       row.className = 'thumbnail-reference';
       const label = document.createElement('span');
       label.textContent = name;
       const button = document.createElement('button');
-      button.type = 'button'; button.className = 'text-button'; button.textContent = 'Remove';
+      button.type = 'button';
+      button.className = 'text-button';
+      button.textContent = 'Remove';
       button.setAttribute('aria-label', `Remove ${name} reference`);
-      button.addEventListener('click', () => { references.delete(id); update(); });
-      row.append(label, button); $('thumbnail-references').append(row);
+      button.addEventListener('click', () => {
+        references.delete(id);
+        $('thumbnail-status').textContent = '';
+        update();
+      });
+      row.append(label, button);
+      $('thumbnail-references').append(row);
     }
   }
-  window.addEventListener('gallery:preview-image', event => { current = event.detail; update(); });
-  add.addEventListener('click', () => {
-    if (!current) return;
-    if (references.has(current.id)) references.delete(current.id);
-    else if (references.size < 5) references.set(current.id, {name: current.name});
-    else { $('viewer-error').textContent = 'Choose up to 5 references.'; $('viewer-error').hidden = false; }
+
+  function showCollection() {
+    previewObserver.disconnect();
+    grid.replaceChildren();
+    const collection = collections.find(item => item.id === picker.value);
+    $('thumbnail-collection-help').textContent = collection?.images.length
+      ? 'Click a thumbnail to select or deselect it.'
+      : 'Save images using the heart or + in the gallery to choose them here.';
+    for (const id of collection?.images || []) {
+      const tile = document.createElement('button');
+      const image = document.createElement('img');
+      const name = host.saved.referenceName(id);
+      tile.type = 'button';
+      tile.dataset.imageId = image.dataset.imageId = id;
+      tile.setAttribute('aria-label', name);
+      image.alt = '';
+      tile.append(image);
+      tile.addEventListener('click', () => {
+        const status = $('thumbnail-status');
+        if (references.has(id)) references.delete(id);
+        else if (references.size < 5) references.set(id, {name});
+        else {
+          status.textContent = 'Remove a reference before adding another. The limit is five.';
+          return;
+        }
+        status.textContent = '';
+        update();
+      });
+      grid.append(tile);
+      previewObserver.observe(image);
+    }
     update();
+  }
+
+  function openGenerator() {
+    collections = host.saved?.referenceCollections() || [];
+    const previous = picker.value;
+    picker.replaceChildren(...collections.map(collection =>
+      new Option(`${collection.name} (${collection.images.length})`, collection.id)));
+    if (collections.some(collection => collection.id === previous)) picker.value = previous;
+    else picker.value = (collections.find(collection => collection.images.length) || collections[0])?.id || '';
+    picker.disabled = !collections.length;
+    $('thumbnail-dialog').showModal();
+    showCollection();
+  }
+
+  picker.addEventListener('change', showCollection);
+  window.addEventListener('gallery:connected', () => {
+    if ($('thumbnail-dialog').open) showCollection();
   });
   $('thumbnail-upload').addEventListener('change', event => {
     const files = [...event.target.files];
@@ -44,9 +105,9 @@
     }
     event.target.value = '';
   });
-  $('thumbnail-open').addEventListener('click', () => $('thumbnail-dialog').showModal());
+  $('thumbnail-open').addEventListener('click', openGenerator);
   $('thumbnail-close').addEventListener('click', () => $('thumbnail-dialog').close());
-  window.addEventListener('DOMContentLoaded', () => $('thumbnail-dialog').showModal());
+  window.addEventListener('DOMContentLoaded', openGenerator);
   function asDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -64,30 +125,31 @@
       const promptResponse = await fetch('./thumbnail-prompt.txt');
       if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
       const prompt = await promptResponse.text();
-      const input = [{type: 'text', text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}`}];
-      for (const [id, reference] of references) {
-        const file = reference.file || await window.galleryHost.imageFile(id);
+      const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}`}];
+      for (const [id, reference] of [...references]) {
+        const file = reference.file || await host.imageFile(id);
         if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
         const dataUrl = await asDataUrl(file);
         const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
         if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
-        input.push({type: 'image', mime_type: match[1], data: match[2]});
+        parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': $('thumbnail-key').value.trim(), 'Api-Revision': '2026-05-20'},
-        body: JSON.stringify({model: 'gemini-nano-banana-2.1', store: false, input, response_format: {type: 'image', mime_type: 'image/png', aspect_ratio: $('thumbnail-aspect').value, image_size: '2K'}})
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': $('thumbnail-key').value.trim()},
+        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: $('thumbnail-aspect').value, imageSize: '2K'}}})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message || `Google returned error ${response.status}.`);
-      const image = (data.steps || []).filter(step => step.type === 'model_output').flatMap(step => step.content || []).find(part => part.type === 'image' && part.data);
+      const image = (data.candidates || []).flatMap(candidate => candidate.content?.parts || [])
+        .find(part => !part.thought && part.inlineData?.data)?.inlineData;
       if (!image) throw new Error('Google did not return an image. Try adjusting your description or references.');
       const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      resultUrl = URL.createObjectURL(new Blob([bytes], {type: image.mime_type || 'image/png'}));
+      resultUrl = URL.createObjectURL(new Blob([bytes], {type: image.mimeType || 'image/png'}));
       $('thumbnail-result').src = resultUrl; $('thumbnail-result').hidden = false;
       $('thumbnail-download').href = resultUrl; $('thumbnail-download').hidden = false;
       status.textContent = 'Thumbnail ready.';
-    } catch (error) { status.textContent = error.message || 'Generation failed. Please try again.'; }
+    } catch (error) { status.textContent = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message; }
     finally { button.disabled = false; }
   });
 })();

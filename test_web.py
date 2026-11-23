@@ -38,6 +38,8 @@ class WebExportTests(unittest.TestCase):
             self.assertNotIn('id="thumbnail-dialog"', html)
             self.assertIn('<base href="../">', generator_html)
             self.assertIn('id="thumbnail-upload"', generator_html)
+            self.assertIn('id="thumbnail-collection"', generator_html)
+            self.assertNotIn('BMC-Widget', generator_html)
             generator = next(output.glob('thumbnail-generator.*.js'))
             prompt = next(output.glob('thumbnail-prompt.*.txt'))
             self.assertIn(generator.name, generator_html)

@@ -106,6 +106,8 @@ def build(cache, output, extend=None):
 
 def build_generator(output, html, generator_script):
     """Expose the generator on a separate route with the same gallery and assets."""
+    # Keep third-party scripts off the page that handles API keys.
+    html = re.sub(r'<script data-name="BMC-Widget"[^>]*></script>', '', html)
     html = html.replace('<head>', '<head>\n  <base href="../">', 1)
     html = html.replace('<section hidden class="sync-panel"', (HERE / 'web' / 'generator.html').read_text(encoding='utf-8') + '\n    <section hidden class="sync-panel"', 1)
     html = re.sub(r'(<script src="\./app\.[a-f0-9]+\.js" defer></script>)',

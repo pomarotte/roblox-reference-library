@@ -289,6 +289,12 @@ window.galleryCollections = (() => {
       get active() { return !!view; },
       get ids() { return active()?.images || []; },
       get title() { return active()?.name; },
+      referenceCollections() {
+        const {favorites, collections} = data();
+        return [{id: 'favorites', name: 'Favorites', images: favorites},
+          ...collections.map(collection => ({...collection, id: 'collection:' + collection.id}))];
+      },
+      referenceName(id) { return getImage(id)?.filename || `Saved image ${id}`; },
       reset() { view = ''; refresh(); },
       select(id) { view = id; refresh(); },
       showImage(id) { viewerFavorite.dataset.favoriteId = id; updateFavorite(viewerFavorite, id); },
