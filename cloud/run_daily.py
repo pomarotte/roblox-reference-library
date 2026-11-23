@@ -24,7 +24,7 @@ DEFAULT_RCLONE = next((Path.home() / 'Downloads').glob('rclone-*/rclone-*/rclone
 REMOTE = os.environ.get('DAILY_R2_REMOTE', 'roblox-thumbnails-upload:roblox-thumbnails')
 
 
-def capture(script, state, limit, ranked_ids=()):
+def capture(script, state, limit, ranked_games=None):
     spec = importlib.util.spec_from_file_location('chart_collector', script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -38,6 +38,7 @@ def capture(script, state, limit, ranked_ids=()):
         request_delay=.4, cloud_mode=True, max_image_mb=12, batch_size=20, thumbs_per_game=20))
     collector.open_database()
     db = collector.db
+    ranked_games = ranked_games or {}
     try:
         previous_thumbnails = db.execute("SELECT COUNT(*) FROM game_images WHERE kind='thumbnail' AND first_seen=?", (collector.day,)).fetchone()[0]
         db.execute('CREATE TABLE IF NOT EXISTS metadata (universe_id INTEGER PRIMARY KEY, genre TEXT, subgenre TEXT)')
@@ -50,7 +51,7 @@ def capture(script, state, limit, ranked_ids=()):
             content = collector.request_json(module.ROBLOX + '/explore-api/v1/get-sort-content',
                 {'sessionId': collector.session_id, 'device': 'computer', 'country': 'all', 'sortId': sort['sortId']})
             ids.update(module.extract_universe_ids(content))
-        ids.update(ranked_ids)
+        ids.update(ranked_games)
         if not ids:
             raise RuntimeError('Roblox returned no chart games.')
         selected = sorted(ids)[:limit or None]
@@ -59,16 +60,20 @@ def capture(script, state, limit, ranked_ids=()):
                           ON CONFLICT(universe_id) DO UPDATE SET last_discovered=excluded.last_discovered''',
                        [(uid, collector.day, collector.day) for uid in selected])
         db.commit()
-        for group in module.chunks(selected, 40):
+        metadata = [ranked_games[uid] for uid in selected if uid in ranked_games]
+        missing = [uid for uid in selected if uid not in ranked_games]
+        for group in module.chunks(missing, 40):
             response = collector.request_json(module.GAMES + '/v1/games', {'universeIds': ','.join(map(str,group))})
             for game in response['data']:
-                if game['id'] not in group:
-                    continue
-                db.execute('UPDATE games SET name=?, visits=?, root_place_id=? WHERE universe_id=?',
-                           (game.get('name'), game.get('visits'), game.get('rootPlaceId'), game['id']))
-                db.execute('INSERT OR REPLACE INTO metadata VALUES (?,?,?)',
-                           (game['id'], game.get('genre_l1') or 'Unknown', game.get('genre_l2') or 'Unknown'))
-            db.commit()
+                if game['id'] in group:
+                    metadata.append(dict(id=game['id'], name=game.get('name'), visits=game.get('visits'),
+                                         place=game.get('rootPlaceId'), genre=game.get('genre_l1'),
+                                         subgenre=game.get('genre_l2')))
+        db.executemany('UPDATE games SET name=?, visits=?, root_place_id=? WHERE universe_id=?',
+                       [(game['name'], game['visits'], game['place'], game['id']) for game in metadata])
+        db.executemany('INSERT OR REPLACE INTO metadata VALUES (?,?,?)',
+                       [(game['id'], game['genre'] or 'Unknown', game['subgenre'] or 'Unknown') for game in metadata])
+        db.commit()
         collector.collect_images(selected)
         if collector.errors:
             raise RuntimeError(f'{collector.errors} collection errors. The last published catalogue is still available.')
@@ -258,8 +263,8 @@ def main():
     args.state.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(args.state / 'run-lock.sqlite3', timeout=0)) as lock:
         lock.execute('BEGIN EXCLUSIVE')
-        ranked_ids = chart_entries(json.loads(args.charts.read_text(encoding='utf-8'))['genres']) if args.charts else ()
-        day = args.rebuild_day or capture(args.collector, args.state.resolve(), args.limit, ranked_ids)
+        ranked_games = chart_entries(json.loads(args.charts.read_text(encoding='utf-8'))['genres']) if args.charts else None
+        day = args.rebuild_day or capture(args.collector, args.state.resolve(), args.limit, ranked_games)
         prepare_assets(args.state, args.rclone)
         publish(args.output, args.state / 'dataset.sqlite3', day, args.cache)
     print(f'Preview updated with chart captures for {day}.', flush=True)
