@@ -113,7 +113,7 @@ jobs:
           retention-days: 90
           overwrite: true
       - name: Publish genre and subgenre charts
-        run: python -u cloud/charts.py --archive "$RUNNER_TEMP/library.sqlite3" --daily "$RUNNER_TEMP/daily/dataset.sqlite3" --output .web-build/cloud/data/charts.json
+        run: python -u cloud/charts.py --output .web-build/cloud/data/charts.json
       - name: Set up gallery routes
         run: |
           python - <<'PY'

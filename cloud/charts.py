@@ -1,10 +1,8 @@
-"""Publish a concurrent-player snapshot from Roblox charts and RoLibrary's tracked games."""
+"""Publish a concurrent-player snapshot of games from Roblox's public charts."""
 import argparse
-from contextlib import closing
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import sqlite3
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -83,13 +81,8 @@ def make_charts(games):
     return charts
 
 
-def publish_charts(archive, daily, output):
-    with closing(sqlite3.connect(archive.resolve().as_uri() + '?mode=ro', uri=True)) as database:
-        ids = {row[0] for row in database.execute('SELECT id FROM games')}
-    if daily and daily.is_file():
-        with closing(sqlite3.connect(daily.resolve().as_uri() + '?mode=ro', uri=True)) as database:
-            ids.update(row[0] for row in database.execute('SELECT universe_id FROM games'))
-
+def publish_charts(output):
+    ids = set()
     params = {'sessionId': str(uuid4()), 'device': 'computer', 'country': 'all'}
     explore = 'https://apis.roblox.com/explore-api/v1/'
     sorts = request_json(explore + 'get-sorts', params)['sorts']
@@ -122,8 +115,6 @@ def publish_charts(archive, daily, output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--archive', type=Path, required=True)
-    parser.add_argument('--daily', type=Path)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    publish_charts(args.archive, args.daily, args.output)
+    publish_charts(args.output)

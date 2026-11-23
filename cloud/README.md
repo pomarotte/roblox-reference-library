@@ -28,6 +28,6 @@ the same model as the historical collection. Pass `--limit 8` for a small test r
 Collection ZIP downloads require the R2 bucket to allow GET from `https://pomarotte.github.io`
 in its CORS policy. Ordinary image display does not depend on that policy.
 
-The Pages build publishes **Top 100 charts** from the archive, daily tracked games, and Roblox’s public charts. It ranks each genre and subgenre by concurrent players at the time of the scan. Categories with fewer than 100 ranked games show the available results. The snapshot refreshes during each Pages publish, including the scheduled runs, and works without R2 credentials.
+The Pages build publishes **Top 100 charts** using games from Roblox’s public Charts API. It ranks each genre and subgenre by concurrent players at the time of the scan. Categories with fewer than 100 ranked games show the available results. The snapshot refreshes during each Pages publish, including the scheduled runs, and works without R2 credentials.
 
 The generator’s game-link import uses a read-only Cloudflare Worker because Roblox’s lookup APIs do not allow cross-origin browser requests. Deploy it with `npx wrangler deploy --config cloud/wrangler.reference.toml` from the repository root, using a Cloudflare account authorized for the `rolibrary.win` zone. The Worker returns Roblox CDN URLs and has no storage bindings. Run `node cloud/test-reference-worker.mjs` to check it locally.
