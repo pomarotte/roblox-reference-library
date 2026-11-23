@@ -9,7 +9,9 @@ function element(id) {
 const calls = [];
 class Reader { readAsDataURL(file) { this.result = `data:${file.type};base64,YQ==`; this.onload(); } }
 const document = {getElementById: element, createElement: () => element(Symbol())};
+const storage = new Map([['rolibrary-gemini-api-key', 'previous-key']]);
 const window = {
+  localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)},
   addEventListener(type, fn) {events[type] = fn;},
   galleryHost: {
     saved: {
@@ -27,12 +29,22 @@ class IntersectionObserver {observe() {} disconnect() {}}
 class Option {constructor(label, value) {Object.assign(this, {label, value});}}
 const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: {createObjectURL: () => 'blob:result', revokeObjectURL() {}}, fetch: async (url, options) => {
   if (!options) return {ok: true, text: async () => 'background prompt'};
+  assert.match(url, /^https:\/\/generativelanguage\.googleapis\.com\//);
+  assert.equal(options.headers['x-goog-api-key'], 'key');
   calls.push(JSON.parse(options.body));
   return {ok: true, json: async () => ({candidates: [{content: {parts: [{inlineData: {data: 'YQ==', mimeType: 'image/png'}}]}}]})};
 }};
 vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), context);
 (async () => {
   events.DOMContentLoaded();
+  const keyInput = element('thumbnail-key');
+  assert.equal(keyInput.value, 'previous-key');
+  element('thumbnail-forget-key').handlers.click();
+  assert.equal(keyInput.value, '');
+  assert.equal(storage.size, 0);
+  keyInput.value = 'key';
+  keyInput.handlers.input();
+  assert.equal(storage.get('rolibrary-gemini-api-key'), 'key');
   const picker = element('thumbnail-collection');
   assert.equal(picker.children.length, 2);
   assert.equal(picker.value, 'favorites');
@@ -49,7 +61,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   const file = {name: 'my-reference.png', type: 'image/png', size: 1};
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   assert.equal(element('thumbnail-count').textContent, '(2)');
-  element('thumbnail-key').value = 'key'; element('thumbnail-concept').value = 'a dragon'; element('thumbnail-aspect').value = '16:9';
+  element('thumbnail-concept').value = 'a dragon'; element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
   assert.equal(calls[0].contents[0].parts[1].inlineData.data, 'YQ==');

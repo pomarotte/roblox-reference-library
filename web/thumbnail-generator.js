@@ -4,6 +4,30 @@
   const references = new Map();
   let resultUrl, uploadId = 0, collections = [];
   const host = window.galleryHost;
+  const keyInput = $('thumbnail-key');
+  const keyStorage = 'rolibrary-gemini-api-key';
+  const keyStatus = $('thumbnail-key-status');
+  try { keyInput.value = window.localStorage.getItem(keyStorage) || ''; }
+  catch { keyStatus.textContent = 'Browser storage is unavailable.'; keyStatus.hidden = false; }
+
+  function saveKey() {
+    try {
+      const key = keyInput.value.trim();
+      if (key) window.localStorage.setItem(keyStorage, key);
+      else window.localStorage.removeItem(keyStorage);
+      keyStatus.hidden = true;
+    } catch {
+      keyStatus.textContent = 'Could not update the saved key. You can manage it in your browser’s site settings.';
+      keyStatus.hidden = false;
+    }
+  }
+  keyInput.addEventListener('input', saveKey);
+  $('thumbnail-forget-key').addEventListener('click', () => {
+    keyInput.value = '';
+    saveKey();
+    keyInput.focus();
+  });
+
   const picker = $('thumbnail-collection');
   const grid = $('thumbnail-collection-images');
   const previewObserver = new IntersectionObserver(entries => {
@@ -119,7 +143,8 @@
   $('thumbnail-form').addEventListener('submit', async event => {
     event.preventDefault();
     const button = $('thumbnail-generate'), status = $('thumbnail-status');
-    if (!$('thumbnail-key').value.trim() || !$('thumbnail-concept').value.trim()) { status.textContent = 'Enter an API key and thumbnail description.'; return; }
+    const key = keyInput.value.trim();
+    if (!key || !$('thumbnail-concept').value.trim()) { status.textContent = 'Enter an API key and thumbnail description.'; return; }
     button.disabled = true; status.textContent = 'Generating thumbnail…';
     try {
       const promptResponse = await fetch('./thumbnail-prompt.txt');
@@ -135,7 +160,7 @@
         parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': $('thumbnail-key').value.trim()},
+        method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
         body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: $('thumbnail-aspect').value, imageSize: '2K'}}})
       });
       const data = await response.json();
