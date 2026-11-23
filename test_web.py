@@ -74,14 +74,15 @@ class WebExportTests(unittest.TestCase):
                 with patch.dict('os.environ', GITHUB_SHA=commit):
                     build_cloud(cloud_output, cache=root)
                 cloud_html = (cloud_output / 'index.html').read_text(encoding='utf-8')
-                self.assertIn('type="button">Top 100 charts</button>', cloud_html)
+                self.assertIn('id="open-charts" class="secondary" type="button" aria-pressed="false">Top charts</button>', cloud_html)
+                self.assertIn('id="chart-controls" class="chart-controls" hidden', cloud_html)
                 self.assertIn(f'id="last-updated" hidden></span><span id="site-version">Site version {commit[:12]}</span>', cloud_html)
             np.savez(root / 'search-index.npz',image_ids=[999],scenes=np.ones((1,512)),palettes=np.ones((1,48)))
             with self.assertRaisesRegex(ValueError,'every image'):
                 build(root,output)
 
     def test_charts_rank_genres_and_subgenres_independently(self):
-        games = [dict(id=i, rootPlaceId=i, name=f'Game {i}', genre_l1='Simulation',
+        games = [dict(id=i, rootPlaceId=i, name=f'Game {i}', genre_l1='Simulation', thumbnail=f'https://tr.rbxcdn.com/image-{i}',
                       genre_l2='Tycoon' if i < 3 else 'Idle', playing=i) for i in range(1, 105)]
         games.append(dict(games[0], id=105, rootPlaceId=105, playing=2))
         games.append(dict(games[0], id=106, rootPlaceId=106, playing=None))
@@ -89,6 +90,7 @@ class WebExportTests(unittest.TestCase):
         self.assertEqual([row['place'] for row in charts['Simulation']['games']], list(range(104, 4, -1)))
         self.assertEqual([row['place'] for row in charts['Simulation']['subgenres']['Tycoon']], [2, 105, 1])
         self.assertEqual(charts['Education']['games'], [])
+        self.assertEqual(charts['Simulation']['games'][0]['image'], 'https://tr.rbxcdn.com/image-104')
 
 
 if __name__ == '__main__':

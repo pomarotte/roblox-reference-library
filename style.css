@@ -21,3 +21,6 @@ dialog{background:#1c2022;color:var(--ink);border:1px solid #454c4f;border-radiu
 .brand-logo{width:32px;height:32px;object-fit:contain;flex:none}.brand-wordmark{display:block;width:120px;height:auto}
 
 .contact{margin:8px 0 0;font-size:12px;color:var(--muted)}.contact summary{cursor:pointer}.contact a{display:block;margin-top:8px;color:var(--ink);text-decoration:none}.contact a:hover{text-decoration:underline}
+
+.toolbar-primary{display:flex;align-items:center;gap:8px}.toolbar-primary>.secondary[aria-pressed=true]{filter:brightness(1.3)}.chart-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0;color:var(--muted);font-size:12px}.chart-controls label{display:flex;align-items:center;gap:8px}.chart-controls select{min-width:150px}#chart-controls[hidden]{display:none!important}
+.chart-card{min-width:0}.chart-card>.card{width:100%;height:100%;text-decoration:none}.chart-card .chart-open{margin:12px;display:inline-flex}.chart-card>.card>h3{white-space:normal}

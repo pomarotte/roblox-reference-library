@@ -35,25 +35,34 @@ function options(select, values, label) {
 }
 
 const chartsButton = $('open-charts');
-if (chartsButton && !chartsButton.hidden) {
-  const dialog = $('charts-dialog'), genre = $('chart-genre'), subgenre = $('chart-subgenre');
-  const status = $('chart-status'), results = $('chart-results');
+const chartControls = $('chart-controls');
+if (chartsButton && chartControls && !chartsButton.hidden) {
+  const genre = $('chart-genre'), subgenre = $('chart-subgenre');
+  const status = $('chart-status');
   let snapshot, loading = false;
-  function showChart() {
+  let chartGeneration = 0;
+  async function showChart() {
     const chart = snapshot.genres[genre.value];
-    const games = subgenre.value ? chart.subgenres[subgenre.value] : chart.games;
+    let games = subgenre.value ? chart.subgenres[subgenre.value] : chart.games;
     const updated = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(snapshot.updated));
     status.textContent = games.length ? `${format.format(games.length)} games · Updated ${updated}` : `No ranked games in this category · Updated ${updated}`;
-    results.replaceChildren(...games.map(game => {
-      const row = node('li'), link = node('a', '', game.name);
-      link.href = `https://www.roblox.com/games/${game.place}`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      row.append(link, node('span', '', `${format.format(game.players)} playing`));
-      return row;
-    }));
+    $('explore-title').textContent = `Top ${games.length} · ${subgenre.value || genre.value}`;
+    if (window.galleryHost?.chartCards) {
+      const generation = ++chartGeneration;
+      games = await window.galleryHost.chartCards(games);
+      if (generation !== chartGeneration || chartsButton.getAttribute('aria-pressed') !== 'true') return;
+    }
+    const items = games.map((game, index) => ({...game, image_id: game.image, genre: genre.value,
+      subgenre: subgenre.value, status: 'ready', image_count: 1, chart_rank: index + 1}));
+    $('grid').classList.remove('icons');
+    $('grid').replaceChildren(...items.map(chartCard));
+    $('empty').hidden = games.length > 0;
+    $('empty').querySelector('h3').textContent = 'No games in this chart.';
+    $('result-count').textContent = status.textContent;
+    $('page-label').textContent = 'Chart';
+    $('previous').disabled = $('next').disabled = true;
   }
-  function selectGenre() {
+  async function selectGenre() {
     const names = Object.keys(snapshot.genres[genre.value].subgenres).sort();
     subgenre.value = '';
     options(subgenre, names, 'All subgenres');
@@ -62,12 +71,32 @@ if (chartsButton && !chartsButton.hidden) {
   }
   genre.addEventListener('change', selectGenre);
   subgenre.addEventListener('change', showChart);
-  $('close-charts').addEventListener('click', () => dialog.close());
+  function resetCharts() {
+    chartGeneration++;
+    chartControls.hidden = true;
+    chartsButton.setAttribute('aria-pressed', 'false');
+    chartsButton.hidden = false;
+    page = 0;
+    load(true);
+  }
   chartsButton.addEventListener('click', async () => {
-    dialog.showModal();
-    if (snapshot || loading) return;
-    loading = true;
+    if (chartsButton.getAttribute('aria-pressed') === 'true') {
+      resetCharts();
+      return;
+    }
+    if (snapshot) {
+      chartsButton.setAttribute('aria-pressed', 'true');
+      chartControls.hidden = false;
+      showChart();
+      return;
+    }
+    chartsButton.setAttribute('aria-pressed', 'true');
+    chartsButton.hidden = false;
+    chartControls.hidden = false;
     status.textContent = 'Loading charts…';
+    $('explore-title').textContent = 'Top charts';
+    $('grid').replaceChildren();
+    loading = true;
     try {
       const response = await fetch('./data/charts.json');
       if (!response.ok) throw new Error('Chart snapshot unavailable');
@@ -79,9 +108,29 @@ if (chartsButton && !chartsButton.hidden) {
     } catch {
       snapshot = undefined;
       genre.disabled = subgenre.disabled = true;
-      status.textContent = 'Charts are unavailable. Close and reopen to try again.';
+      status.textContent = 'Charts are unavailable. Try again later.';
     } finally { loading = false; }
   });
+  window.addEventListener('gallery:saved-view', resetCharts);
+}
+
+function chartCard(game) {
+  const card = node('article', 'chart-card');
+  const button = node('a', 'card');
+  button.href = `https://www.roblox.com/games/${game.place}`;
+  button.target = '_blank';
+  button.rel = 'noopener noreferrer';
+  const imageBox = node('div', 'card-image'), image = node('img');
+  image.src = game.image || '';
+  image.alt = game.image ? `Thumbnail for ${game.name}` : `Thumbnail unavailable for ${game.name}`;
+  image.loading = 'lazy';
+  imageBox.append(image);
+  const meta = node('div', 'card-meta');
+  meta.append(node('span', '', `${game.genre} · ${game.subgenre || 'All subgenres'}`),
+    node('span', '', `${compact.format(game.players)} playing`));
+  button.append(imageBox, node('h3', '', `${game.chart_rank}. ${game.name}`), meta);
+  card.append(button);
+  return card;
 }
 
 function updateSubgenres() {
@@ -337,7 +386,21 @@ $('range').addEventListener('change', () => {
   load(true);
 });
 $('sort').addEventListener('change', () => load(true));
+$('filters').addEventListener('change', event => {
+  if (event.target !== genre && event.target !== subgenre && chartsButton?.getAttribute('aria-pressed') === 'true') {
+    chartControls.hidden = true;
+    chartsButton.setAttribute('aria-pressed', 'false');
+    chartsButton.hidden = false;
+  }
+});
 $('clear-filters').addEventListener('click', () => { $('filters').reset(); clearSimilarity(); updateSubgenres(); load(true); });
+$('toolbar-primary').addEventListener('click', event => {
+  if (event.target.matches('[data-kind]') && chartsButton?.getAttribute('aria-pressed') === 'true') {
+    chartControls.hidden = true;
+    chartsButton.setAttribute('aria-pressed', 'false');
+    chartsButton.hidden = false;
+  }
+});
 document.querySelector('.brand').addEventListener('click', event => {
   if (!window.galleryHost) return;
   event.preventDefault();

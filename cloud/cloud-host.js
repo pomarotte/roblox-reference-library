@@ -63,6 +63,18 @@
   });
   window.galleryHost = {
     ready,
+    async chartCards(games) {
+      const byPlace = new Map(catalogue.games.filter(game => game.root_place_id)
+        .map(game => [game.root_place_id, game]));
+      return Promise.all(games.map(async game => {
+        const saved = byPlace.get(game.place);
+        if (!saved || game.image) return game;
+        const image = saved.images.find(item => item.kind === 'thumbs');
+        if (!image) return game;
+        try { return {...game, image: URL.createObjectURL(await imageFile(image.id))}; }
+        catch { return game; }
+      }));
+    },
     imageFile,
     searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),

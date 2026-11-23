@@ -205,6 +205,15 @@
   }
   window.galleryHost = {
     ready,
+    async chartCards(games) {
+      return Promise.all(games.map(async game => {
+        const saved = catalogue.games.find(item => item.name === game.name && item.status === 'ready');
+        const image = saved?.images.find(item => item.kind === 'thumbs');
+        if (!image) return game;
+        try { return {...game, image: URL.createObjectURL(await imageFile(image.id))}; }
+        catch { return game; }
+      }));
+    },
     imageFile,
     searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),

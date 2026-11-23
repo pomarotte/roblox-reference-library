@@ -95,7 +95,7 @@ def build(cache, output, extend=None):
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
     html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
-    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.rbxcdn.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com https://references.rolibrary.win https://*.rbxcdn.com; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.rbxcdn.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com https://references.rolibrary.win https://*.rbxcdn.com https://*.roblox.com; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     html = html.replace('</main>', '<p><a class="secondary" href="https://buymeacoffee.com/winpo1" target="_blank" rel="noopener noreferrer">Support RoLibrary ↗</a></p>\n</main>', 1)
     for original, hashed in assets.items():
         html = html.replace(original, hashed)

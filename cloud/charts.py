@@ -70,7 +70,8 @@ def make_charts(games):
         genre = genres.get(genre.casefold(), genre)
         chart = charts.setdefault(genre, {'games': [], 'subgenres': {}})
         subgenre = game.get('genre_l2')
-        entry = {'name': game['name'], 'place': game['rootPlaceId'], 'players': game['playing']}
+        entry = {'name': game['name'], 'place': game['rootPlaceId'], 'players': game['playing'],
+                 'image': game.get('thumbnail')}
         if len(chart['games']) < 100:
             chart['games'].append(entry)
         if subgenre and subgenre.casefold() != 'unknown':
@@ -86,6 +87,7 @@ def publish_charts(output):
     params = {'sessionId': str(uuid4()), 'device': 'computer', 'country': 'all'}
     explore = 'https://apis.roblox.com/explore-api/v1/'
     sorts = request_json(explore + 'get-sorts', params)['sorts']
+    thumbnails = {}
     sort_ids = {sort['sortId'] for sort in sorts if sort.get('games') and sort.get('sortId')}
     sort_ids.add('top-playing-now')
     sort_ids.update('trending-in-' + genre.lower().replace(' & ', ' and ').replace(' ', '-') for genre in GENRES)
@@ -94,7 +96,11 @@ def publish_charts(output):
     for sort_id in sorted(sort_ids):
         content = request_json(explore + 'get-sort-content', {**params, 'sortId': sort_id},
                                optional=sort_id.startswith('trending-in-'))
-        ids.update(game['universeId'] for game in (content.get('games') or []) if game.get('universeId'))
+        for game in content.get('games') or []:
+            if game.get('universeId'):
+                ids.add(game['universeId'])
+                if game.get('thumbnail'):
+                    thumbnails[game['universeId']] = game['thumbnail']
 
     games = {}
     ids = sorted(ids)
@@ -104,6 +110,8 @@ def publish_charts(output):
         response = request_json('https://games.roblox.com/v1/games', {'universeIds': ','.join(map(str, batch))})
         games.update((game['id'], game) for game in response['data'])
         time.sleep(.5)
+    for game in games.values():
+        game['thumbnail'] = thumbnails.get(game['id'])
     charts = make_charts(games.values())
     if not any(chart['games'] for chart in charts.values()):
         raise RuntimeError('Roblox returned no ranked games.')
