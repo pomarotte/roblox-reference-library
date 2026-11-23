@@ -162,6 +162,7 @@
       if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
       const prompt = await promptResponse.text();
       const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}`}];
+      if (references.size) parts.push({text: 'The next images are the user-selected thumbnail style and composition references, in selection order. The first is the primary visual template.'});
       for (const [id, reference] of [...references]) {
         const file = reference.file || await host.imageFile(id);
         if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
@@ -170,14 +171,14 @@
         if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
         parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
-      parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them for anatomy and character design, not as characters to copy unless requested. Ignore their labels and sheet layout.'});
+      parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. The selected thumbnail controls the rendering style, composition, framing, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
       for (let i = 1; i <= 3; i++) {
         const response = await fetch(`./character-references/character-${i}.jpeg`);
         if (!response.ok) throw new Error('Could not load the character references. Please try again.');
         const dataUrl = await asDataUrl(await response.blob());
         parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
       }
-      parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Choose a face appropriate to the scene, adapting its expression to the character and the selected scene style. Do not copy the sheet layout.'});
+      parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the visual style of the primary thumbnail, not the rendering style of these sheets. Do not copy the sheet layout.'});
       for (let i = 1; i <= 3; i++) {
         const response = await fetch(`./character-references/faces-${i}.png`);
         if (!response.ok) throw new Error('Could not load the face references. Please try again.');

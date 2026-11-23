@@ -82,9 +82,10 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   element('thumbnail-concept').value = 'a dragon'; element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].contents[0].parts[1].inlineData.data, 'YQ==');
-  assert.equal(calls[0].contents[0].parts[1].inlineData.mimeType, 'image/webp');
-  assert.equal(calls[0].contents[0].parts[2].inlineData.mimeType, 'image/png');
+  assert.match(calls[0].contents[0].parts[1].text, /first is the primary visual template/);
+  assert.equal(calls[0].contents[0].parts[2].inlineData.data, 'YQ==');
+  assert.equal(calls[0].contents[0].parts[2].inlineData.mimeType, 'image/webp');
+  assert.equal(calls[0].contents[0].parts[3].inlineData.mimeType, 'image/png');
   assert.equal(calls[0].contents[0].parts.filter(part => part.inlineData).length, 8);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready.');
