@@ -73,6 +73,7 @@ def build(cache, output, extend=None):
     (data_dir / catalogue_name).write_bytes(compressed_catalogue)
     for filename in ('LICENSE', 'NOTICE.md', 'logo.svg', 'rolibrary.svg', 'blacklogo.svg'):
         shutil.copyfile(HERE / filename, output / filename)
+    shutil.copytree(HERE / 'web' / 'character-references', output / 'character-references', dirs_exist_ok=True)
     assets = {'catalog.json.gz': catalogue_name}
     for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'thumbnail-prompt.txt', 'thumbnail-generator.js', 'app.js', 'style.css', 'web.css'):
         source = HERE / filename if filename in ('app.js', 'style.css') else HERE / 'web' / filename

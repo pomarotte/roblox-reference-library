@@ -37,7 +37,8 @@ class IntersectionObserver {
 }
 class Option {constructor(label, value) {Object.assign(this, {label, value});}}
 const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: {createObjectURL: () => 'blob:result', revokeObjectURL() {}}, fetch: async (url, options) => {
-  if (!options) return {ok: true, text: async () => 'background prompt'};
+  if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => 'background prompt'};
+  if (!options && url.includes('character-references')) return {ok: true, blob: async () => ({type: url.endsWith('.png') ? 'image/png' : 'image/jpeg'})};
   assert.match(url, /^https:\/\/generativelanguage\.googleapis\.com\//);
   assert.equal(options.headers['x-goog-api-key'], 'key');
   calls.push(JSON.parse(options.body));
@@ -84,6 +85,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls[0].contents[0].parts[1].inlineData.data, 'YQ==');
   assert.equal(calls[0].contents[0].parts[1].inlineData.mimeType, 'image/webp');
   assert.equal(calls[0].contents[0].parts[2].inlineData.mimeType, 'image/png');
+  assert.equal(calls[0].contents[0].parts.filter(part => part.inlineData).length, 8);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready.');
   element('thumbnail-upload').handlers.change({target: {files: Array(5).fill(file), value: 'selected'}});

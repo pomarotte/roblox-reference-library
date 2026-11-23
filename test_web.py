@@ -37,6 +37,7 @@ class WebExportTests(unittest.TestCase):
             self.assertNotIn('thumbnail-generator.', html)
             self.assertNotIn('id="thumbnail-dialog"', html)
             self.assertIn('<base href="../">', generator_html)
+            self.assertEqual(len(list((output / 'character-references').iterdir())), 6)
             self.assertIn('id="thumbnail-upload"', generator_html)
             self.assertIn('id="thumbnail-collection"', generator_html)
             self.assertNotIn('BMC-Widget', generator_html)
