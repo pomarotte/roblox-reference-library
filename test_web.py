@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 from build_web import build
 from cloud.build_cloud import build_cloud
-from cloud.charts import make_charts
+from cloud.charts import add_thumbnails, chart_entries, make_charts
 
 
 class WebExportTests(unittest.TestCase):
@@ -91,6 +91,20 @@ class WebExportTests(unittest.TestCase):
         self.assertEqual([row['place'] for row in charts['Simulation']['subgenres']['Tycoon']], [2, 105, 1])
         self.assertEqual(charts['Education']['games'], [])
         self.assertEqual(charts['Simulation']['games'][0]['image'], 'https://tr.rbxcdn.com/image-104')
+
+    def test_charts_get_thumbnails_for_games_without_a_ranking_image(self):
+        charts = make_charts([dict(id=11, rootPlaceId=22, name='Missing image', genre_l1='Shooter',
+                                   genre_l2='PvE Shooter', playing=200)])
+        url = 'https://tr.rbxcdn.com/ranked-thumbnail'
+        response = {'data': [{'universeId': 11, 'thumbnails': [
+            {'state': 'Completed', 'imageUrl': url}, {'state': 'Completed', 'imageUrl': url},
+            {'state': 'Pending', 'imageUrl': 'https://tr.rbxcdn.com/pending'},
+        ]}]}
+        with patch('cloud.charts.request_json', return_value=response) as request, patch('cloud.charts.time.sleep'):
+            add_thumbnails(chart_entries(charts))
+        self.assertEqual(request.call_args.args[1]['universeIds'], '11')
+        self.assertEqual(charts['Shooter']['games'][0]['thumbnails'], [url])
+        self.assertEqual(charts['Shooter']['subgenres']['PvE Shooter'][0]['thumbnails'], [url])
 
 
 if __name__ == '__main__':

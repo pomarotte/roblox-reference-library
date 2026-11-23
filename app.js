@@ -39,23 +39,24 @@ const chartControls = $('chart-controls');
 if (chartsButton && chartControls && !chartsButton.hidden) {
   const genre = $('chart-genre'), subgenre = $('chart-subgenre');
   const status = $('chart-status');
-  let snapshot, loading = false;
+  let snapshot;
   let chartGeneration = 0;
   async function showChart() {
+    if (chartsButton.getAttribute('aria-pressed') !== 'true') return;
+    stopHover();
+    const current = ++chartGeneration;
     const chart = snapshot.genres[genre.value];
     let games = subgenre.value ? chart.subgenres[subgenre.value] : chart.games;
     const updated = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(snapshot.updated));
     status.textContent = games.length ? `${format.format(games.length)} games · Updated ${updated}` : `No ranked games in this category · Updated ${updated}`;
     $('explore-title').textContent = `Top ${games.length} · ${subgenre.value || genre.value}`;
-    if (window.galleryHost?.chartCards) {
-      const generation = ++chartGeneration;
-      games = await window.galleryHost.chartCards(games);
-      if (generation !== chartGeneration || chartsButton.getAttribute('aria-pressed') !== 'true') return;
-    }
-    const items = games.map((game, index) => ({...game, image_id: game.image, genre: genre.value,
-      subgenre: subgenre.value, status: 'ready', image_count: 1, chart_rank: index + 1}));
+    games = await window.galleryHost.chartCards(games);
+    if (current !== chartGeneration || chartsButton.getAttribute('aria-pressed') !== 'true') return;
+    const items = games.map((game, index) => ({...game, image_id: game.images[0]?.id,
+      genre: game.genre || genre.value, subgenre: game.subgenre || subgenre.value,
+      image_count: game.images.length, chart_rank: index + 1}));
     $('grid').classList.remove('icons');
-    $('grid').replaceChildren(...items.map(chartCard));
+    $('grid').replaceChildren(...items.map(game => card(game, true)));
     $('empty').hidden = games.length > 0;
     $('empty').querySelector('h3').textContent = 'No games in this chart.';
     $('result-count').textContent = status.textContent;
@@ -71,19 +72,16 @@ if (chartsButton && chartControls && !chartsButton.hidden) {
   }
   genre.addEventListener('change', selectGenre);
   subgenre.addEventListener('change', showChart);
-  function resetCharts() {
-    chartGeneration++;
-    chartControls.hidden = true;
-    chartsButton.setAttribute('aria-pressed', 'false');
-    chartsButton.hidden = false;
-    page = 0;
-    load(true);
-  }
   chartsButton.addEventListener('click', async () => {
     if (chartsButton.getAttribute('aria-pressed') === 'true') {
-      resetCharts();
+      load(true);
       return;
     }
+    generation++;
+    activeRequest?.abort();
+    stopHover();
+    $('loading').hidden = $('error').hidden = $('empty').hidden = true;
+    $('grid').setAttribute('aria-busy', 'false');
     if (snapshot) {
       chartsButton.setAttribute('aria-pressed', 'true');
       chartControls.hidden = false;
@@ -96,41 +94,20 @@ if (chartsButton && chartControls && !chartsButton.hidden) {
     status.textContent = 'Loading charts…';
     $('explore-title').textContent = 'Top charts';
     $('grid').replaceChildren();
-    loading = true;
     try {
       const response = await fetch('./data/charts.json');
       if (!response.ok) throw new Error('Chart snapshot unavailable');
       snapshot = await response.json();
       genre.replaceChildren(...Object.keys(snapshot.genres).sort().map(name => new Option(name, name)));
-      genre.value = 'Simulation';
+      if (snapshot.genres.Simulation) genre.value = 'Simulation';
       genre.disabled = false;
       selectGenre();
     } catch {
       snapshot = undefined;
       genre.disabled = subgenre.disabled = true;
       status.textContent = 'Charts are unavailable. Try again later.';
-    } finally { loading = false; }
+    }
   });
-  window.addEventListener('gallery:saved-view', resetCharts);
-}
-
-function chartCard(game) {
-  const card = node('article', 'chart-card');
-  const button = node('a', 'card');
-  button.href = `https://www.roblox.com/games/${game.place}`;
-  button.target = '_blank';
-  button.rel = 'noopener noreferrer';
-  const imageBox = node('div', 'card-image'), image = node('img');
-  image.src = game.image || '';
-  image.alt = game.image ? `Thumbnail for ${game.name}` : `Thumbnail unavailable for ${game.name}`;
-  image.loading = 'lazy';
-  imageBox.append(image);
-  const meta = node('div', 'card-meta');
-  meta.append(node('span', '', `${game.genre} · ${game.subgenre || 'All subgenres'}`),
-    node('span', '', `${compact.format(game.players)} playing`));
-  button.append(imageBox, node('h3', '', `${game.chart_rank}. ${game.name}`), meta);
-  card.append(button);
-  return card;
 }
 
 function updateSubgenres() {
@@ -204,57 +181,97 @@ function parameters() {
 function missingImage(event) {
   event.currentTarget.replaceWith(node('span', 'missing-image', 'Image unavailable'));
 }
-function card(game) {
-  const cardKind = kind;
+function displayImage(element, image) {
+  if (image.url) element[element.tagName === 'A' ? 'href' : 'src'] = image.url;
+  else imageSource(element, image.id);
+}
+function card(game, chart = false) {
+  const cardKind = chart ? 'thumbs' : kind;
   let displayedImageId = game.image_id;
   const button = node('button', 'card');
   button.type = 'button';
   button.setAttribute('aria-label', `Explore ${game.name || 'game ' + game.id}`);
   const imageBox = node('div', 'card-image');
   const image = node('img');
-  imageSource(image, game.image_id);
-  image.alt = `${kind === 'icons' ? 'Icon' : 'Thumbnail'} for ${game.name || 'game ' + game.id}`;
+  image.alt = `${cardKind === 'icons' ? 'Icon' : 'Thumbnail'} for ${game.name || 'game ' + game.id}`;
   image.loading = 'lazy';
   image.decoding = 'async';
-  image.addEventListener('error', missingImage, {once: true});
   const counter = node('span', 'image-total', `${game.image_count} saved`);
-  imageBox.append(image);
-  if (game.similarity_score === undefined) imageBox.append(counter);
+  const placeholder = node('span', 'missing-image', 'Image unavailable');
+  if (game.similarity_score === undefined && game.image_count) imageBox.append(counter);
   const meta = node('div', 'card-meta');
-  const visits = game.visits === null ? 'Visits unknown' : `${compact.format(game.visits)} visits`;
+  const visits = chart ? `${compact.format(game.players)} playing` : game.visits === null ? 'Visits unknown' : `${compact.format(game.visits)} visits`;
   const visitLabel = node('span', '', visits);
-  if (game.visits !== null) visitLabel.title = `${format.format(game.visits)} lifetime visits`;
+  if (!chart && game.visits !== null) visitLabel.title = `${format.format(game.visits)} lifetime visits`;
   meta.append(node('span', '', game.genre || 'Awaiting metadata'), visitLabel);
-  button.append(imageBox, node('h3', '', game.name || `Game ${game.id}`), meta, node('span', 'card-subgenre', game.subgenre || (game.status === 'unavailable' ? 'Metadata unavailable' : 'Information still being collected')));
+  const title = game.name || `Game ${game.id}`;
+  button.append(imageBox, node('h3', '', chart ? `${game.chart_rank}. ${title}` : title), meta, node('span', 'card-subgenre', game.subgenre || (chart ? 'All subgenres' : game.status === 'unavailable' ? 'Metadata unavailable' : 'Information still being collected')));
   if (game.similarity_score !== undefined) button.append(node('span', 'match-score', `Visual match · ${game.similarity_score.toFixed(2)}`));
   let ownStop = () => {};
-  const root = saved ? saved.card(button, game, () => displayedImageId) : button;
+  const root = saved && typeof game.image_id === 'number' ? saved.card(button, game, () => displayedImageId) : button;
+  const actions = chart && root.querySelector('.card-save-actions');
+  const failed = new Set();
+  const chartImages = () => game.images.filter(item => !failed.has(item.id));
+  function preview(item) {
+    displayedImageId = item?.id;
+    if (actions) actions.hidden = typeof displayedImageId !== 'number';
+    if (item) {
+      imageBox.prepend(image);
+      displayImage(image, item);
+      if (chart) placeholder.remove();
+    } else {
+      image.remove();
+      counter.remove();
+      imageBox.prepend(placeholder);
+    }
+  }
+  if (chart) {
+    image.addEventListener('error', () => {
+      failed.add(displayedImageId);
+      preview(chartImages()[0]);
+      counter.textContent = `${chartImages().length} images`;
+    });
+    counter.textContent = `${game.image_count} images`;
+    preview(game.images[0]);
+  } else {
+    image.addEventListener('error', missingImage, {once: true});
+    imageBox.prepend(image);
+    imageSource(image, game.image_id);
+  }
   async function cycle() {
     stopHover();
-    if ($('all-images').checked || game.similarity_score !== undefined || saved?.active || dailyCategory() === 'new-images') return;
+    if (!chart && ($('all-images').checked || game.similarity_score !== undefined || saved?.active || dailyCategory() === 'new-images')) return;
     if (game.image_count < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const token = ++hoverGeneration;
     let timer;
     ownStop = () => {
       if (token === hoverGeneration) hoverGeneration++;
       clearInterval(timer);
-      displayedImageId = game.image_id;
-      imageSource(image, game.image_id);
-      counter.textContent = `${game.image_count} saved`;
+      if (chart) {
+        const images = chartImages();
+        preview(images[0]);
+        counter.textContent = `${images.length} images`;
+      } else {
+        displayedImageId = game.image_id;
+        imageSource(image, game.image_id);
+        counter.textContent = `${game.image_count} saved`;
+      }
     };
     stopHover = ownStop;
     try {
-      if (!imageLists.has(game.id)) imageLists.set(game.id, api(`/api/game/${game.id}`).then(g => g.images).catch(error => { imageLists.delete(game.id); throw error; }));
-      const images = (await imageLists.get(game.id)).filter(item => item.kind === cardKind);
+      if (!chart && !imageLists.has(game.id)) imageLists.set(game.id, api(`/api/game/${game.id}`).then(g => g.images).catch(error => { imageLists.delete(game.id); throw error; }));
+      const images = chart ? chartImages() : (await imageLists.get(game.id)).filter(item => item.kind === cardKind);
       if (token !== hoverGeneration || !button.isConnected || images.length < 2) return;
-      let index = Math.max(0, images.findIndex(item => item.id === game.image_id));
       timer = setInterval(() => {
         if (!button.isConnected) return ownStop();
         if (root.querySelector('.card-save-actions:hover, .card-save-actions:focus-within')) return;
-        index = (index + 1) % images.length;
-        displayedImageId = images[index].id;
-        imageSource(image, displayedImageId);
-        counter.textContent = `${index + 1} / ${images.length}`;
+        const available = chart ? chartImages() : images;
+        if (available.length < 2) return ownStop();
+        const index = (available.findIndex(item => item.id === displayedImageId) + 1) % available.length;
+        displayedImageId = available[index].id;
+        if (chart) preview(available[index]);
+        else imageSource(image, displayedImageId);
+        counter.textContent = `${index + 1} / ${available.length}`;
       }, 1000);
     } catch (_) { ownStop(); }
   }
@@ -262,10 +279,15 @@ function card(game) {
   root.addEventListener('pointerleave', () => ownStop());
   button.addEventListener('focus', () => { if (!button.matches(':hover')) cycle(); });
   button.addEventListener('blur', () => ownStop());
-  button.addEventListener('click', () => openGame(game.id, button, displayedImageId));
+  button.addEventListener('click', () => openGame(game.id, button, displayedImageId, cardKind,
+    chart ? {...game, images: chartImages()} : undefined));
   return root;
 }
 async function load(reset = false) {
+  if (chartsButton?.getAttribute('aria-pressed') === 'true') {
+    chartsButton.setAttribute('aria-pressed', 'false');
+    chartControls.hidden = true;
+  }
   stopHover();
   $('explore-title').textContent = saved?.title || (kind === 'icons' ? 'Explore Icons' : 'Explore Thumbnails');
   if ($('daily-category')) $('all-images').closest('label').hidden = dailyCategory() === 'new-images';
@@ -287,7 +309,7 @@ async function load(reset = false) {
     if (current !== generation) return;
     total = data.total;
     $('grid').classList.toggle('icons', kind === 'icons');
-    $('grid').replaceChildren(...data.items.map(card));
+    $('grid').replaceChildren(...data.items.map(game => card(game)));
     $('empty').hidden = total !== 0;
     const unit = dailyCategory() === 'new-images' ? (kind === 'icons' ? 'icons' : 'thumbnails') : saved?.active || $('all-images').checked ? 'images' : 'games';
     if ($('daily-category')) {
@@ -315,14 +337,14 @@ async function load(reset = false) {
 function savedDate(value) {
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)} ${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}`;
 }
-async function openGame(id, trigger, imageId) {
+async function openGame(id, trigger, imageId, imageKind, chartGame) {
   stopHover();
   lastTrigger = trigger;
   try {
-    const game = await api(`/api/game/${id}`);
+    const game = chartGame || await api(`/api/game/${id}`);
     selectedGame = game;
-    selectedImages = game.images.filter(image => image.kind === kind);
-    if (!selectedImages.length) throw new Error('No images of this type are available.');
+    selectedImages = game.images.filter(image => image.kind === imageKind);
+    if (!selectedImages.length && !chartGame) throw new Error('No images of this type are available.');
     imageIndex = 0;
     $('viewer-title').textContent = game.name || `Game ${game.id}`;
     $('viewer-genre').textContent = `${game.genre || 'Unknown genre'} / ${game.subgenre || 'Unknown subgenre'}`;
@@ -341,9 +363,9 @@ async function openGame(id, trigger, imageId) {
     $('filmstrip').replaceChildren(...selectedImages.map((image, index) => {
       const button = node('button');
       button.type = 'button';
-      button.setAttribute('aria-label', `Saved image ${index + 1}, ${savedDate(image.captured)}`);
+      button.setAttribute('aria-label', image.captured ? `Saved image ${index + 1}, ${savedDate(image.captured)}` : `Roblox thumbnail ${index + 1}`);
       const preview = node('img');
-      imageSource(preview, image.id);
+      displayImage(preview, image);
       preview.alt = '';
       preview.loading = 'lazy';
       button.append(preview);
@@ -358,13 +380,22 @@ async function openGame(id, trigger, imageId) {
   }
 }
 function showImage(index) {
-  imageIndex = (index + selectedImages.length) % selectedImages.length;
+  imageIndex = selectedImages.length ? (index + selectedImages.length) % selectedImages.length : 0;
   const image = selectedImages[imageIndex];
-  saved?.showImage(image.id);
-  imageSource($('preview'), image.id);
-  $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, saved image ${imageIndex + 1}`;
-  $('image-info').textContent = `${imageIndex + 1} / ${selectedImages.length} · Saved ${savedDate(image.captured)}`;
-  imageSource($('open-image'), image.id);
+  const archived = Boolean(image && !image.url);
+  if (saved) {
+    $('viewer-saved-actions').hidden = !archived;
+    if (archived) saved.showImage(image.id);
+  }
+  $('find-similar').hidden = !archived;
+  $('open-image').hidden = $('download-image').hidden = $('preview').hidden = !image;
+  $('preview-unavailable').hidden = Boolean(image);
+  if (image) {
+    displayImage($('preview'), image);
+    displayImage($('open-image'), image);
+    $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, ${archived ? 'saved image' : 'Roblox thumbnail'} ${imageIndex + 1}`;
+  }
+  $('image-info').textContent = image ? `${imageIndex + 1} / ${selectedImages.length} · ${archived ? `Saved ${savedDate(image.captured)}` : 'Roblox thumbnail'}` : '';
   $('image-prev').disabled = $('image-next').disabled = selectedImages.length < 2;
   [...$('filmstrip').children].forEach((button, i) => button.setAttribute('aria-pressed', String(i === imageIndex)));
   $('filmstrip').children[imageIndex]?.scrollIntoView({block: 'nearest', inline: 'nearest'});
@@ -386,21 +417,7 @@ $('range').addEventListener('change', () => {
   load(true);
 });
 $('sort').addEventListener('change', () => load(true));
-$('filters').addEventListener('change', event => {
-  if (event.target !== genre && event.target !== subgenre && chartsButton?.getAttribute('aria-pressed') === 'true') {
-    chartControls.hidden = true;
-    chartsButton.setAttribute('aria-pressed', 'false');
-    chartsButton.hidden = false;
-  }
-});
 $('clear-filters').addEventListener('click', () => { $('filters').reset(); clearSimilarity(); updateSubgenres(); load(true); });
-$('toolbar-primary').addEventListener('click', event => {
-  if (event.target.matches('[data-kind]') && chartsButton?.getAttribute('aria-pressed') === 'true') {
-    chartControls.hidden = true;
-    chartsButton.setAttribute('aria-pressed', 'false');
-    chartsButton.hidden = false;
-  }
-});
 document.querySelector('.brand').addEventListener('click', event => {
   if (!window.galleryHost) return;
   event.preventDefault();
@@ -464,6 +481,8 @@ function clearSimilarity() {
 }
 $('find-similar').addEventListener('click', () => {
   if (!reference) saveViewBeforeSimilarity();
+  kind = selectedImages[imageIndex].kind;
+  document.querySelectorAll('[data-kind]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.kind === kind)));
   saved?.reset();
   if (reference?.url) URL.revokeObjectURL(reference.url);
   reference = {imageId: selectedImages[imageIndex].id, name: selectedGame.name || `Game ${selectedGame.id}`};
@@ -536,9 +555,9 @@ $('download-image').addEventListener('click', async () => {
   try {
     const image = selectedImages[imageIndex];
     let file;
-    if (window.galleryHost) file = await window.galleryHost.imageFile(image.id);
+    if (window.galleryHost && !image.url) file = await window.galleryHost.imageFile(image.id);
     else {
-      const response = await fetch(`/image/${image.id}`);
+      const response = await fetch(image.url || `/image/${image.id}`, image.url ? {cache: 'no-store'} : undefined);
       if (!response.ok) throw new Error('Could not download this image.');
       file = await response.blob();
     }

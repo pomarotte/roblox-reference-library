@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: '47 5,13,21 * * *'
   workflow_dispatch:
+    inputs:
+      refresh_archive:
+        description: Collect and index current chart thumbnails before publishing
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -31,6 +36,8 @@ jobs:
       - run: node web/test-collections.mjs
       - run: node web/test-thumbnail-generator.cjs
       - run: node cloud/test-reference-worker.mjs
+      - run: node test-cloud.cjs
+        working-directory: cloud
       - run: python -m unittest test_web
       - name: Prepare both galleries
         run: |
@@ -47,6 +54,8 @@ jobs:
               for name in ('library.sqlite3', 'search-index.npz'):
                   shutil.move(cache / name, Path('${{ runner.temp }}') / name)
           PY
+      - name: Publish genre and subgenre charts
+        run: python -u cloud/charts.py --output .web-build/cloud/data/charts.json
       - name: Read daily indexing configuration
         id: daily
         env:
@@ -75,8 +84,10 @@ jobs:
       - name: Select capture or rebuild
         id: scan
         if: steps.daily.outputs.enabled == 'true'
+        env:
+          REFRESH_ARCHIVE: ${{ inputs.refresh_archive }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != schedule && -f "$RUNNER_TEMP/daily/dataset.sqlite3" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != schedule && "$REFRESH_ARCHIVE" != true && -f "$RUNNER_TEMP/daily/dataset.sqlite3" ]]; then
             echo 'rebuild=true' >> "$GITHUB_OUTPUT"
           fi
       - name: Install daily indexing dependencies
@@ -103,7 +114,7 @@ jobs:
             day=$(python -c 'import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute("SELECT MAX(observed_date) FROM observations").fetchone()[0])' "$RUNNER_TEMP/daily/dataset.sqlite3")
             args+=(--rebuild-day "$day")
           fi
-          python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud "${args[@]}"
+          python -u cloud/run_daily.py --state "$RUNNER_TEMP/daily" --cache "$RUNNER_TEMP" --rclone rclone --output .web-build/cloud --charts .web-build/cloud/data/charts.json "${args[@]}"
       - name: Save the daily checkpoint
         if: steps.daily.outputs.enabled == 'true' && steps.scan.outputs.rebuild != 'true'
         uses: actions/upload-artifact@v4
@@ -112,8 +123,6 @@ jobs:
           path: ${{ runner.temp }}/daily/dataset.sqlite3
           retention-days: 90
           overwrite: true
-      - name: Publish genre and subgenre charts
-        run: python -u cloud/charts.py --output .web-build/cloud/data/charts.json
       - name: Set up gallery routes
         run: |
           python - <<'PY'

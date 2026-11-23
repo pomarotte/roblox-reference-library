@@ -42,6 +42,9 @@
     if (!response.ok) throw new Error(`Could not download "${images.get(id).filename}" (HTTP ${response.status}).`);
     return response.blob();
   }
+  function isRobloxThumbnail(url) {
+    return typeof url === 'string' && /^https:\/\/(?:[a-z0-9-]+\.)+rbxcdn\.com\//i.test(url);
+  }
   const ready = rpc('init').then(async data => {
     catalogue = data;
     images = new Map();
@@ -64,16 +67,19 @@
   window.galleryHost = {
     ready,
     async chartCards(games) {
-      const byPlace = new Map(catalogue.games.filter(game => game.root_place_id)
+      const data = await ready.catch(() => ({games: []}));
+      const byId = new Map(data.games.map(game => [game.id, game]));
+      const byPlace = new Map(data.games.filter(game => game.root_place_id)
         .map(game => [game.root_place_id, game]));
-      return Promise.all(games.map(async game => {
-        const saved = byPlace.get(game.place);
-        if (!saved || game.image) return game;
-        const image = saved.images.find(item => item.kind === 'thumbs');
-        if (!image) return game;
-        try { return {...game, image: URL.createObjectURL(await imageFile(image.id))}; }
-        catch { return game; }
-      }));
+      return games.map(game => {
+        const saved = byId.get(game.id) || byPlace.get(game.place);
+        const archived = (saved?.images || []).filter(image => image.kind === 'thumbs');
+        const current = [...new Set([...(game.thumbnails || []), game.image].filter(isRobloxThumbnail))]
+          .map(url => ({id: url, url, kind: 'thumbs', filename: `roblox-${game.place}-thumbnail.${/\/webp\//i.test(url) ? 'webp' : 'png'}`}));
+        return {...game, id: game.id ?? saved?.id, root_place_id: game.place,
+          genre: game.genre || saved?.genre, subgenre: game.subgenre || saved?.subgenre,
+          visits: game.visits ?? saved?.visits ?? null, images: [...archived, ...current]};
+      });
     },
     imageFile,
     searchImage: file => rpc('reference', file),

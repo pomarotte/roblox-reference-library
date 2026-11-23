@@ -28,6 +28,7 @@
 .thumbnail-reference span { min-width: 0; overflow-wrap: anywhere; }
 #thumbnail-result { max-width: 100%; border-radius: 10px; }
 #thumbnail-download { text-align: center; }
+#thumbnail-edit-fields { display: grid; gap: 8px; }
 
 .thumbnail-collection-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr)); gap: 8px; min-width: 0; max-width: 100%; max-height: 260px; overflow: auto; padding: 4px; }
 .thumbnail-collection-images:empty { display: none; }
@@ -59,4 +60,3 @@
 #chart-results li span { margin-inline-start: 10px; color: var(--muted); white-space: nowrap; }
 
 .toolbar-primary{display:flex;align-items:center;gap:8px}.toolbar-primary>.secondary[aria-pressed=true]{background:#292929;border-color:#494949}.chart-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0;color:var(--muted);font-size:12px}.chart-controls label{display:flex;align-items:center;gap:8px}.chart-controls select{min-width:150px}#chart-controls[hidden],#charts-dialog[hidden]{display:none!important}
-.chart-card{min-width:0}.chart-card>.card{width:100%;height:100%;text-decoration:none}.chart-card .chart-open{margin:12px;display:inline-flex}.chart-card>.card>h3{white-space:normal}

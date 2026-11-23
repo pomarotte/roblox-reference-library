@@ -4,6 +4,7 @@ from contextlib import closing
 from datetime import date, datetime, timezone
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -13,6 +14,7 @@ import tempfile
 
 import numpy as np
 from build_cloud import HERE, GALLERY, build_cloud
+from charts import chart_entries
 from visual import MODEL, REVISION, palette_features, scene_image
 
 DEFAULT_COLLECTOR = HERE / 'collector.py'
@@ -22,7 +24,7 @@ DEFAULT_RCLONE = next((Path.home() / 'Downloads').glob('rclone-*/rclone-*/rclone
 REMOTE = os.environ.get('DAILY_R2_REMOTE', 'roblox-thumbnails-upload:roblox-thumbnails')
 
 
-def capture(script, state, limit):
+def capture(script, state, limit, ranked_ids=()):
     spec = importlib.util.spec_from_file_location('chart_collector', script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -48,6 +50,7 @@ def capture(script, state, limit):
             content = collector.request_json(module.ROBLOX + '/explore-api/v1/get-sort-content',
                 {'sessionId': collector.session_id, 'device': 'computer', 'country': 'all', 'sortId': sort['sortId']})
             ids.update(module.extract_universe_ids(content))
+        ids.update(ranked_ids)
         if not ids:
             raise RuntimeError('Roblox returned no chart games.')
         selected = sorted(ids)[:limit or None]
@@ -247,6 +250,7 @@ def main():
     parser.add_argument('--rclone', default=DEFAULT_RCLONE)
     parser.add_argument('--limit', type=int, default=0, help='Test with this many chart games; 0 checks all.')
     parser.add_argument('--rebuild-day', help='Publish a previously captured date without running discovery.')
+    parser.add_argument('--charts', type=Path, help='Include every ranked game from this chart snapshot.')
     parser.add_argument('--cache', type=Path, default=GALLERY, help='Historical database and saved visual index.')
     args = parser.parse_args()
     if args.limit < 0:
@@ -254,7 +258,8 @@ def main():
     args.state.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(args.state / 'run-lock.sqlite3', timeout=0)) as lock:
         lock.execute('BEGIN EXCLUSIVE')
-        day = args.rebuild_day or capture(args.collector, args.state.resolve(), args.limit)
+        ranked_ids = chart_entries(json.loads(args.charts.read_text(encoding='utf-8'))['genres']) if args.charts else ()
+        day = args.rebuild_day or capture(args.collector, args.state.resolve(), args.limit, ranked_ids)
         prepare_assets(args.state, args.rclone)
         publish(args.output, args.state / 'dataset.sqlite3', day, args.cache)
     print(f'Preview updated with chart captures for {day}.', flush=True)

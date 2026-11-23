@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 process.env.TZ = 'America/Los_Angeles';
 
-const game = {id: 7, status: 'ready', genre: 'Simulation', subgenre: 'Tycoon', images: [{id: 3, kind: 'thumbs', filename: '7 test.webp'}, {id: 4, kind: 'thumbs', captured: '20261119_000000', object_key: 'daily/test.webp'}, {id: 5, kind: 'icons', captured: '20261120_000000', object_key: 'daily/icon.webp'}]};
+const game = {id: 7, root_place_id: 700, status: 'ready', genre: 'Simulation', subgenre: 'Tycoon', images: [{id: 3, kind: 'thumbs', filename: '7 test.webp'}, {id: 4, kind: 'thumbs', captured: '20261119_000000', object_key: 'daily/test.webp'}, {id: 5, kind: 'icons', captured: '20261120_000000', object_key: 'daily/icon.webp'}]};
 let savedOptions;
 const lastUpdated = {hidden: true, dataset: {time: '14:32 UTC'}};
 class Worker {
@@ -19,6 +19,17 @@ const context = {window, Worker, Map, URL, DOMException, queueMicrotask, documen
 }};
 vm.runInNewContext(fs.readFileSync('cloud-host.js', 'utf8'), context);
 (async () => {
+  const thumbnail = 'https://tr.rbxcdn.com/example/768/432/Image/Webp/noFilter';
+  const [indexed, legacy, unindexed, missing] = await window.galleryHost.chartCards([
+    {id: 7, place: 701, thumbnails: [thumbnail], image: thumbnail},
+    {place: 700}, {id: 8, place: 800, thumbnails: [thumbnail, 'javascript:alert(1)']},
+    {id: 9, place: 900}
+  ]);
+  assert.deepEqual(Array.from(indexed.images, image => image.id), [3, 4, thumbnail]);
+  assert.equal(indexed.root_place_id, 701);
+  assert.deepEqual(Array.from(legacy.images, image => image.id), [3, 4]);
+  assert.deepEqual(Array.from(unindexed.images, image => image.url), [thumbnail]);
+  assert.equal(missing.images.length, 0);
   const status = await window.galleryHost.api('/api/status');
   assert.equal(status.games, 1);
   assert.equal(status.images, 3);

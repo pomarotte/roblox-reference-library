@@ -70,8 +70,9 @@ def make_charts(games):
         genre = genres.get(genre.casefold(), genre)
         chart = charts.setdefault(genre, {'games': [], 'subgenres': {}})
         subgenre = game.get('genre_l2')
-        entry = {'name': game['name'], 'place': game['rootPlaceId'], 'players': game['playing'],
-                 'image': game.get('thumbnail')}
+        entry = {'id': game['id'], 'name': game['name'], 'place': game['rootPlaceId'],
+                 'players': game['playing'], 'visits': game.get('visits'), 'genre': genre,
+                 'subgenre': subgenre, 'image': game.get('thumbnail')}
         if len(chart['games']) < 100:
             chart['games'].append(entry)
         if subgenre and subgenre.casefold() != 'unknown':
@@ -80,6 +81,28 @@ def make_charts(games):
             if len(subchart) < 100:
                 subchart.append(entry)
     return charts
+
+
+def chart_entries(charts):
+    return {entry['id']: entry for chart in charts.values()
+            for category in (chart['games'], *chart['subgenres'].values()) for entry in category}
+
+
+def add_thumbnails(entries):
+    ids = list(entries)
+    for offset in range(0, len(ids), 20):
+        batch = ids[offset:offset + 20]
+        response = request_json('https://thumbnails.roblox.com/v1/games/multiget/thumbnails', {
+            'universeIds': ','.join(map(str, batch)), 'countPerUniverse': 10,
+            'defaults': 'false', 'size': '768x432', 'format': 'Webp', 'isCircular': 'false',
+        })
+        for game in response['data']:
+            entry = entries.get(game['universeId'])
+            if entry is None:
+                continue
+            entry['thumbnails'] = list(dict.fromkeys(item['imageUrl'] for item in game.get('thumbnails') or []
+                                                      if item.get('state') == 'Completed' and item.get('imageUrl')))
+        time.sleep(.5)
 
 
 def publish_charts(output):
@@ -92,7 +115,11 @@ def publish_charts(output):
     sort_ids.add('top-playing-now')
     sort_ids.update('trending-in-' + genre.lower().replace(' & ', ' and ').replace(' ', '-') for genre in GENRES)
     for sort in sorts:
-        ids.update(game['universeId'] for game in (sort.get('games') or []) if game.get('universeId'))
+        for game in sort.get('games') or []:
+            if game.get('universeId'):
+                ids.add(game['universeId'])
+                if game.get('thumbnail'):
+                    thumbnails[game['universeId']] = game['thumbnail']
     for sort_id in sorted(sort_ids):
         content = request_json(explore + 'get-sort-content', {**params, 'sortId': sort_id},
                                optional=sort_id.startswith('trending-in-'))
@@ -115,6 +142,7 @@ def publish_charts(output):
     charts = make_charts(games.values())
     if not any(chart['games'] for chart in charts.values()):
         raise RuntimeError('Roblox returned no ranked games.')
+    add_thumbnails(chart_entries(charts))
     snapshot = {'updated': datetime.now(timezone.utc).isoformat(timespec='seconds'), 'genres': charts}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')

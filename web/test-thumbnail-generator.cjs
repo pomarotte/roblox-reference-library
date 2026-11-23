@@ -7,7 +7,13 @@ function element(id) {
   return elements.get(id);
 }
 const calls = [];
-class Reader { readAsDataURL(file) { this.result = `data:${file.type};base64,YQ==`; this.onload(); } }
+class Reader {
+  async readAsDataURL(file) {
+    const data = file instanceof Blob ? Buffer.from(await file.arrayBuffer()).toString('base64') : 'YQ==';
+    this.result = `data:${file.type};base64,${data}`;
+    this.onload();
+  }
+}
 const exportsMade = [];
 const document = {getElementById: element, createElement: tag => {
   if (tag !== 'canvas') return element(Symbol());
@@ -15,7 +21,7 @@ const document = {getElementById: element, createElement: tag => {
     getContext: () => ({drawImage: (image, ...rectangle) => { canvas.rectangle = rectangle; }}),
     toBlob: (callback, type) => {
       exportsMade.push({width: canvas.width, height: canvas.height, rectangle: canvas.rectangle, type});
-      callback(new Blob(['output'], {type}));
+      callback(new Blob([`output-${exportsMade.length}`], {type}));
     }
   };
   return canvas;
@@ -49,8 +55,10 @@ class IntersectionObserver {
 class Option {constructor(label, value) {Object.assign(this, {label, value});}}
 const gameImage = 'https://tr.rbxcdn.com/test/768/432/Image/Webp/noFilter';
 const lookupRequests = [];
+let failGeneration = false;
+let exportedUrl = 0;
 const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
-  static createObjectURL() { return 'blob:result'; }
+  static createObjectURL(value) { return value instanceof Blob ? `blob:result-${++exportedUrl}` : 'blob:result'; }
   static revokeObjectURL() {}
 }, createImageBitmap: async () => ({width: 1920, height: 1088, close() {}}), fetch: async (url, options) => {
   if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => 'background prompt'};
@@ -63,8 +71,10 @@ const context = {document, window, IntersectionObserver, Option, FileReader: Rea
   assert.match(url, /^https:\/\/generativelanguage\.googleapis\.com\//);
   assert.equal(options.headers['x-goog-api-key'], 'key');
   calls.push(JSON.parse(options.body));
+  if (failGeneration) return {ok: false, json: async () => ({error: {message: 'Test service error'}})};
   return {ok: true, json: async () => ({candidates: [{content: {parts: [{inlineData: {data: 'YQ==', mimeType: 'image/png'}}]}}]})};
 }};
+element('thumbnail-edit-fields').hidden = true;
 vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), context);
 (async () => {
   const opening = events.DOMContentLoaded();
@@ -142,7 +152,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(finalInstructions, /replace characters from composition or style images/);
   assert.match(finalInstructions, /match the overall brightness and contrast of the Colors image/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
-  assert.match(background.text, /Do not render any text/);
+  assert.match(background.text, /Do not add titles, captions/);
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready · 1920 × 1080');
   assert.deepEqual(exportsMade[0], {width: 1920, height: 1080, rectangle: [0, -4, 1920, 1088], type: 'image/png'});
   selectedRows[1].children[0].children[1].handlers.click();
@@ -183,6 +193,37 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   const gameReference = parts.findIndex(part => part.text?.includes('Roblox thumbnail 1'));
   assert.match(parts[gameReference].text, /Object: .*Logo: .*Text style: /);
   assert.equal(parts[gameReference + 1].inlineData.mimeType, 'image/webp');
+  allow.checked = false;
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  const logoParts = calls[3].contents[0].parts;
+  assert.match(logoParts[0].text, /lettering that is part of a Logo-tagged reference/);
+  assert.ok(logoParts.some(part => /Logo: .*preserving its graphic mark and any lettering/.test(part.text)));
+
+  const edit = element('thumbnail-edit'), applyEdit = element('thumbnail-apply-edit');
+  const editInput = element('thumbnail-edit-instructions');
+  const submitEdit = () => element('thumbnail-form').handlers.submit({preventDefault() {}, submitter: applyEdit});
+  assert.equal(edit.hidden, false);
+  edit.handlers.click();
+  assert.equal(element('thumbnail-edit-fields').hidden, false);
+  element('thumbnail-concept').value = '';
+  editInput.value = 'Make the sky purple';
+  await submitEdit();
+  const firstEdit = calls[4].contents[0].parts;
+  assert.equal(firstEdit.length, 3);
+  assert.equal(atob(firstEdit[1].inlineData.data), 'output-4');
+  assert.match(firstEdit[2].text, /^Make the sky purple\nDo not add new lettering outside logos\.$/);
+  assert.equal(element('thumbnail-status').textContent, 'Edit ready · 960 × 540');
+  const editedDownload = element('thumbnail-download').href;
+  editInput.value = 'Make it darker';
+  failGeneration = true;
+  await submitEdit();
+  assert.equal(atob(calls[5].contents[0].parts[1].inlineData.data), 'output-5');
+  assert.equal(element('thumbnail-download').href, editedDownload);
+  assert.equal(editInput.value, 'Make it darker');
+  assert.equal(element('thumbnail-status').textContent, 'Test service error');
+  failGeneration = false;
+  await submitEdit();
+  assert.notEqual(element('thumbnail-download').href, editedDownload);
   assert.deepEqual([...storage], [['rolibrary-gemini-api-key', 'key']]);
-  console.log('Temporary references, text settings, and exact PNG export passed.');
+  console.log('Temporary references, logo lettering, exact PNG export, and iterative edits passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

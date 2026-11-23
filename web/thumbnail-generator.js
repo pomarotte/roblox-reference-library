@@ -11,10 +11,10 @@
     'Lighting': 'match exposure and brightness, light sources and direction, shadow depth, and contrast; preserve a dark image as dark',
     'Colors': 'match dominant hues, saturation, darkness, and overall color balance; do not brighten or add unrelated colors',
     'Object': 'include the referenced prop or vehicle and preserve its recognizable shape, materials and details',
-    'Logo': 'place the referenced logo in the thumbnail, preserving its shape and identity; use only its graphic mark when text is disabled',
+    'Logo': 'place the complete referenced logo, preserving its graphic mark and any lettering, spelling, and typography that are part of the logo, even when other text is disabled',
     'Text style': 'when text is enabled, use the typeface, weight, color, outline and effects as inspiration for the requested wording'
   };
-  let resultUrl, uploadId = 0, collections = [];
+  let result, resultUrl, uploadId = 0, collections = [];
   const host = window.galleryHost;
   const keyInput = $('thumbnail-key');
   const keyStorage = 'rolibrary-gemini-api-key';
@@ -259,85 +259,107 @@
       }, 'image/png'));
     } finally { bitmap.close(); }
   }
+  async function generationParts(concept, textEnabled, wording) {
+    const promptResponse = await fetch('./thumbnail-prompt.txt');
+    if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
+    const prompt = await promptResponse.text();
+    const textInstruction = textEnabled
+      ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
+        : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
+      : 'Do not add titles, captions, signage, watermarks, or other text. Preserve any lettering that is part of a Logo-tagged reference within the logo itself. Do not repeat that lettering elsewhere.';
+    const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${concept}\n\nTEXT SETTINGS:\n${textInstruction}`}];
+    const selected = [...references].map(([id, reference]) => [id, {...reference, tags: new Set(reference.tags)}]);
+    if (selected.some(([, reference]) => !reference.tags.size)) {
+      throw new Error('Choose at least one tag for each reference image.');
+    }
+    // Keep selection order within each group so the first reference for each tag remains primary.
+    const ordered = [
+      ...selected.filter(([, reference]) => reference.tags.has('Character')),
+      ...selected.filter(([, reference]) => !reference.tags.has('Character'))
+    ];
+    const hasCharacter = ordered[0]?.[1].tags.has('Character');
+    if (hasCharacter) {
+      parts.push({text: 'Use the first attached image as the subject to restage in the requested thumbnail. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position.'});
+    }
+    for (const [index, [id, reference]] of ordered.entries()) {
+      let file = reference.file;
+      if (reference.url) {
+        const response = await fetch(reference.url, {cache: 'no-store'});
+        if (!response.ok) throw new Error('Could not download a Roblox reference. Reload the game thumbnails and try again.');
+        const downloaded = await response.blob();
+        file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
+      }
+      if (!file) file = await host.imageFile(id);
+      if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
+      const dataUrl = await asDataUrl(file);
+      const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
+      if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
+      const instructions = Object.keys(tagDescriptions)
+        .filter(tag => reference.tags.has(tag))
+        .map(tag => `${tag}: ${tagDescriptions[tag]}`);
+      parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Follow the text settings above.`});
+      parts.push({inlineData: {mimeType: match[1], data: match[2]}});
+    }
+    if (!hasCharacter) {
+      parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
+      for (let i = 1; i <= 3; i++) {
+        const response = await fetch(`./character-references/character-${i}.jpeg`);
+        if (!response.ok) throw new Error('Could not load the character references. Please try again.');
+        const dataUrl = await asDataUrl(await response.blob());
+        parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
+      }
+      parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the requested visual style, not the rendering style of these sheets. Do not copy the sheet layout.'});
+      for (let i = 1; i <= 3; i++) {
+        const response = await fetch(`./character-references/faces-${i}.png`);
+        if (!response.ok) throw new Error('Could not load the face references. Please try again.');
+        const dataUrl = await asDataUrl(await response.blob());
+        parts.push({inlineData: {mimeType: 'image/png', data: dataUrl.split(',')[1]}});
+      }
+    }
+    const assigned = Object.keys(tagDescriptions).flatMap(tag => {
+      const images = selected.map(entry => ({reference: entry[1], number: ordered.indexOf(entry) + 1}))
+        .filter(({reference}) => reference.tags.has(tag));
+      if (!images.length) return [];
+      return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
+    });
+    if (selected.some(([, reference]) => reference.tags.has('Composition'))) {
+      parts.push({text: 'Keep the primary Composition camera viewpoint. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
+    }
+    if (assigned.length) {
+      parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject. Do not let other reference images override these assigned aspects.`});
+    }
+    return parts;
+  }
+  const generate = $('thumbnail-generate'), applyEdit = $('thumbnail-apply-edit');
+  const editButton = $('thumbnail-edit'), editFields = $('thumbnail-edit-fields');
+  const editInstructions = $('thumbnail-edit-instructions');
+  editButton.addEventListener('click', () => {
+    editFields.hidden = !editFields.hidden;
+    editButton.setAttribute('aria-expanded', String(!editFields.hidden));
+    if (!editFields.hidden) editInstructions.focus();
+  });
   $('thumbnail-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const button = $('thumbnail-generate'), status = $('thumbnail-status');
+    if (generate.disabled) return;
+    const editing = event.submitter === applyEdit;
+    const status = $('thumbnail-status');
     const key = keyInput.value.trim();
+    const concept = $('thumbnail-concept').value.trim();
+    const changes = editInstructions.value.trim();
     const imageSize = $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
     const [width, height] = imageSize === '1K' ? [960, 540] : [1920, 1080];
-    const textEnabled = allowText.checked;
-    const wording = $('thumbnail-wording').value.trim();
-    if (!key || !$('thumbnail-concept').value.trim()) { status.textContent = 'Enter an API key and thumbnail description.'; return; }
-    button.disabled = true; status.textContent = 'Generating thumbnail…';
+    if (!key || (editing ? !result || !changes : !concept)) {
+      status.textContent = editing ? 'Enter an API key and describe what to change.' : 'Enter an API key and thumbnail description.';
+      return;
+    }
+    generate.disabled = applyEdit.disabled = true;
+    status.textContent = editing ? 'Editing thumbnail…' : 'Generating thumbnail…';
     try {
-      const promptResponse = await fetch('./thumbnail-prompt.txt');
-      if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
-      const prompt = await promptResponse.text();
-      const textInstruction = textEnabled
-        ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
-          : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
-        : 'Do not render any text, letters, numbers, signage or watermarks, even if requested in the scene description or shown in references. A selected logo may contribute its graphic mark only.';
-      const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}\n\nTEXT SETTINGS:\n${textInstruction}`}];
-      const selected = [...references].map(([id, reference]) => [id, {...reference, tags: new Set(reference.tags)}]);
-      if (selected.some(([, reference]) => !reference.tags.size)) {
-        throw new Error('Choose at least one tag for each reference image.');
-      }
-      // Keep selection order within each group so the first reference for each tag remains primary.
-      const ordered = [
-        ...selected.filter(([, reference]) => reference.tags.has('Character')),
-        ...selected.filter(([, reference]) => !reference.tags.has('Character'))
-      ];
-      const hasCharacter = ordered[0]?.[1].tags.has('Character');
-      if (hasCharacter) {
-        parts.push({text: 'Use the first attached image as the subject to restage in the requested thumbnail. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position.'});
-      }
-      for (const [index, [id, reference]] of ordered.entries()) {
-        let file = reference.file;
-        if (reference.url) {
-          const response = await fetch(reference.url, {cache: 'no-store'});
-          if (!response.ok) throw new Error('Could not download a Roblox reference. Reload the game thumbnails and try again.');
-          const downloaded = await response.blob();
-          file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
-        }
-        if (!file) file = await host.imageFile(id);
-        if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
-        const dataUrl = await asDataUrl(file);
-        const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
-        if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
-        const instructions = Object.keys(tagDescriptions)
-          .filter(tag => reference.tags.has(tag))
-          .map(tag => `${tag}: ${tagDescriptions[tag]}`);
-        parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Follow the text settings above.`});
-        parts.push({inlineData: {mimeType: match[1], data: match[2]}});
-      }
-      if (!hasCharacter) {
-        parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
-        for (let i = 1; i <= 3; i++) {
-          const response = await fetch(`./character-references/character-${i}.jpeg`);
-          if (!response.ok) throw new Error('Could not load the character references. Please try again.');
-          const dataUrl = await asDataUrl(await response.blob());
-          parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
-        }
-        parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the requested visual style, not the rendering style of these sheets. Do not copy the sheet layout.'});
-        for (let i = 1; i <= 3; i++) {
-          const response = await fetch(`./character-references/faces-${i}.png`);
-          if (!response.ok) throw new Error('Could not load the face references. Please try again.');
-          const dataUrl = await asDataUrl(await response.blob());
-          parts.push({inlineData: {mimeType: 'image/png', data: dataUrl.split(',')[1]}});
-        }
-      }
-      const assigned = Object.keys(tagDescriptions).flatMap(tag => {
-        const images = selected.map(entry => ({reference: entry[1], number: ordered.indexOf(entry) + 1}))
-          .filter(({reference}) => reference.tags.has(tag));
-        if (!images.length) return [];
-        return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
-      });
-      if (selected.some(([, reference]) => reference.tags.has('Composition'))) {
-        parts.push({text: 'Keep the primary Composition camera viewpoint. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
-      }
-      if (assigned.length) {
-        parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject. Do not let other reference images override these assigned aspects.`});
-      }
+      const parts = editing ? [
+        {text: 'Edit this Roblox thumbnail according to the request below. Preserve the composition, subjects, style, and existing lettering except where the request calls for changes. Return the edited image only.'},
+        {inlineData: {mimeType: result.type, data: (await asDataUrl(result)).split(',')[1]}},
+        {text: allowText.checked ? changes : `${changes}\nDo not add new lettering outside logos.`}
+      ] : await generationParts(concept, allowText.checked, $('thumbnail-wording').value.trim());
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
         method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
         body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize}}})
@@ -350,11 +372,18 @@
       const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
       const exported = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      resultUrl = URL.createObjectURL(exported);
+      result = exported;
+      resultUrl = URL.createObjectURL(result);
       $('thumbnail-result').src = resultUrl; $('thumbnail-result').hidden = false;
       $('thumbnail-download').href = resultUrl; $('thumbnail-download').hidden = false;
-      status.textContent = `Thumbnail ready · ${width} × ${height}`;
+      editButton.hidden = false;
+      editInstructions.value = '';
+      if (!editing) {
+        editFields.hidden = true;
+        editButton.setAttribute('aria-expanded', 'false');
+      }
+      status.textContent = `${editing ? 'Edit ready' : 'Thumbnail ready'} · ${width} × ${height}`;
     } catch (error) { status.textContent = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message; }
-    finally { button.disabled = false; }
+    finally { generate.disabled = applyEdit.disabled = false; }
   });
 })();
