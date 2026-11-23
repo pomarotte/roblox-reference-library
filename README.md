@@ -90,7 +90,7 @@ Split collections above 4 GB or 65,535 files into smaller exports. Downloads do 
 
 ## Generate a thumbnail (website)
 
-Open the generator at [rolibrary.win/gen](https://www.rolibrary.win/gen). Choose a saved collection or Favorites, then click thumbnails to select or deselect them. You can also upload your own reference images there; uploads are temporary and are not saved. Enter a Gemini API key and scene description, and generate. Your supplied Roblox GFX prompt is included automatically. The key is saved in this browser and is sent directly to Google along with your description and selected reference images when you generate. Use **Forget API key** to remove it from this browser. Google may charge your API account. Use reference images you have permission to send. Download the result before closing the page. Generation requires internet access and does not train a model.
+Open the generator at [rolibrary.win/gen](https://www.rolibrary.win/gen). Choose a saved collection or Favorites, then click thumbnails to select or deselect them. You can also upload your own reference images there; uploads are temporary and are not saved. Enter a Gemini API key and scene description, and generate. The generator follows the selected reference style and requests an image without text. The key is saved in this browser and is sent directly to Google along with your description and selected reference images when you generate. Use **Forget API key** to remove it from this browser. Google may charge your API account. Use reference images you have permission to send. Download the result before closing the page. Generation requires internet access and does not train a model.
 
 ## Find similar
 
