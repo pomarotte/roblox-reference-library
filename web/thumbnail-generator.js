@@ -4,7 +4,7 @@
   const references = new Map();
   const tagDescriptions = {
     'Visual style': 'rendering technique, textures, level of realism, and outlines',
-    'Composition': 'framing, camera angle, subject placement, scale, and layout',
+    'Composition': 'framing, camera viewpoint (first person or third person), camera angle, subject placement, scale, and layout',
     'Environment': 'setting, background, and environmental details',
     'Character': 'the exact subject identity, silhouette, anatomy, head and face, distinctive features, clothing, and colors; replace subjects from other references with this character',
     'Lighting': 'match exposure and brightness, light sources and direction, shadow depth, and contrast; preserve a dark image as dark',
@@ -249,6 +249,9 @@
         if (!images.length) return [];
         return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
       });
+      if (selected.some(([, reference]) => reference.tags.has('Composition'))) {
+        parts.push({text: 'Keep the primary Composition camera viewpoint. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
+      }
       if (assigned.length) {
         parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject. Do not let other reference images override these assigned aspects.`});
       }

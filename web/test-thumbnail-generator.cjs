@@ -115,6 +115,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(requestParts.filter(part => part.inlineData).length, 2);
   const finalInstructions = requestParts.at(-1).text;
   assert.match(finalInstructions, /Composition: reference image 2/);
+  assert.ok(requestParts.some(part => part.text?.includes('frame the scene through the player’s eyes')));
   assert.match(finalInstructions, /Environment: reference image 2/);
   assert.match(finalInstructions, /Character: reference image 1/);
   assert.match(finalInstructions, /replace characters from composition or style images/);
