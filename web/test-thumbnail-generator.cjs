@@ -80,6 +80,9 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   assert.equal(element('thumbnail-count').textContent, '(2)');
   const selectedRows = element('thumbnail-references').children;
+  assert.equal(selectedRows[0].children[0].children[0].src, 'fixture-12.webp');
+  assert.equal(selectedRows[1].children[0].children[0].src, 'blob:result');
+  assert.match(selectedRows[1].children[0].children[0].alt, /my-reference.png/);
   const galleryTags = selectedRows[0].children[1].children;
   const environment = galleryTags[3].children[0];
   environment.checked = true;

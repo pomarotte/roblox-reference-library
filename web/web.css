@@ -42,3 +42,5 @@
 .thumbnail-reference-tags legend { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .thumbnail-reference-tags label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
 #thumbnail-form .thumbnail-reference-tags input { width: auto; margin: 0; }
+
+.thumbnail-reference-preview { display: block; width: 150px; max-width: 65%; height: 85px; object-fit: contain; background: #111; border-radius: 6px; }

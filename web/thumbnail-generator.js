@@ -58,21 +58,29 @@
       const {name, tags} = reference;
       const row = document.createElement('div');
       row.className = 'thumbnail-reference';
-      const label = document.createElement('span');
-      label.textContent = name;
+      const image = document.createElement('img');
+      image.className = 'thumbnail-reference-preview';
+      image.alt = `Selected reference: ${name}`;
+      if (reference.file) {
+        if (!reference.previewUrl) reference.previewUrl = URL.createObjectURL(reference.file);
+        image.src = reference.previewUrl;
+      } else {
+        host.imageSource(image, id);
+      }
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'text-button';
       button.textContent = 'Remove';
       button.setAttribute('aria-label', `Remove ${name} reference`);
       button.addEventListener('click', () => {
+        if (reference.previewUrl) URL.revokeObjectURL(reference.previewUrl);
         references.delete(id);
         $('thumbnail-status').textContent = '';
         update();
       });
       const heading = document.createElement('div');
       heading.className = 'thumbnail-reference-heading';
-      heading.append(label, button);
+      heading.append(image, button);
       const tagsGroup = document.createElement('fieldset');
       tagsGroup.className = 'thumbnail-reference-tags';
       const legend = document.createElement('legend');
