@@ -194,6 +194,7 @@
     event.preventDefault();
     const button = $('thumbnail-generate'), status = $('thumbnail-status');
     const key = keyInput.value.trim();
+    const imageSize = $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
     if (!key || !$('thumbnail-concept').value.trim()) { status.textContent = 'Enter an API key and thumbnail description.'; return; }
     button.disabled = true; status.textContent = 'Generating thumbnail…';
     try {
@@ -210,6 +211,10 @@
         ...selected.filter(([, reference]) => reference.tags.has('Character')),
         ...selected.filter(([, reference]) => !reference.tags.has('Character'))
       ];
+      const hasCharacter = ordered[0]?.[1].tags.has('Character');
+      if (hasCharacter) {
+        parts.push({text: 'Use the first attached image as the subject to restage in the requested thumbnail. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position.'});
+      }
       for (const [index, [id, reference]] of ordered.entries()) {
         const file = reference.file || await host.imageFile(id);
         if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
@@ -222,7 +227,7 @@
         parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Do not copy text or lettering.`});
         parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
-      if (!selected.some(([, reference]) => reference.tags.has('Character'))) {
+      if (!hasCharacter) {
         parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
         for (let i = 1; i <= 3; i++) {
           const response = await fetch(`./character-references/character-${i}.jpeg`);
@@ -239,17 +244,17 @@
         }
       }
       const assigned = Object.keys(tagDescriptions).flatMap(tag => {
-        const images = selected.map((entry, index) => ({reference: entry[1], selectionIndex: index, number: ordered.indexOf(entry) + 1}))
+        const images = selected.map(entry => ({reference: entry[1], number: ordered.indexOf(entry) + 1}))
           .filter(({reference}) => reference.tags.has(tag));
         if (!images.length) return [];
         return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
       });
       if (assigned.length) {
-        parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. For Lighting and Colors assignments, preserve the assigned image's exposure, brightness, shadows, and palette throughout the output. Do not let other reference images override these assigned aspects.`});
+        parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject. Do not let other reference images override these assigned aspects.`});
       }
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
         method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
-        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: $('thumbnail-aspect').value, imageSize: '2K'}}})
+        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: $('thumbnail-aspect').value, imageSize}}})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message || `Google returned error ${response.status}.`);

@@ -101,7 +101,10 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   element('thumbnail-concept').value = 'a dragon'; element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
-  const requestParts = calls[0].contents[0].parts;
+  assert.equal(calls[0].generationConfig.imageConfig.imageSize, '2K');
+  const [background, characterBrief, ...labeledImages] = calls[0].contents[0].parts;
+  assert.match(characterBrief.text, /first attached image as the subject to restage/);
+  const requestParts = [background, ...labeledImages];
   assert.match(requestParts[1].text, /filename "my-reference.png"/);
   assert.match(requestParts[1].text, /Character: the exact subject identity/);
   assert.equal(requestParts[2].inlineData.mimeType, 'image/png');
@@ -115,12 +118,14 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(finalInstructions, /Environment: reference image 2/);
   assert.match(finalInstructions, /Character: reference image 1/);
   assert.match(finalInstructions, /replace characters from composition or style images/);
-  assert.match(finalInstructions, /preserve the assigned image's exposure/);
+  assert.match(finalInstructions, /match the overall brightness and contrast of the Colors image/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready.');
   selectedRows[1].children[0].children[1].handlers.click();
+  element('thumbnail-resolution').value = '1K';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 2);
+  assert.equal(calls[1].generationConfig.imageConfig.imageSize, '1K');
   assert.equal(calls[1].contents[0].parts.filter(part => part.inlineData).length, 7);
   assert.match(calls[1].contents[0].parts[3].text, /character reference sheets/);
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
