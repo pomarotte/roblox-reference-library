@@ -4,6 +4,7 @@ from contextlib import closing, contextmanager
 import gzip
 import hashlib
 import json
+import re
 from pathlib import Path
 import shutil
 import sqlite3
@@ -73,7 +74,7 @@ def build(cache, output, extend=None):
     for filename in ('LICENSE', 'NOTICE.md', 'logo.svg', 'rolibrary.svg', 'blacklogo.svg'):
         shutil.copyfile(HERE / filename, output / filename)
     assets = {'catalog.json.gz': catalogue_name}
-    for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'app.js', 'style.css', 'web.css'):
+    for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'thumbnail-prompt.txt', 'thumbnail-generator.js', 'app.js', 'style.css', 'web.css'):
         source = HERE / filename if filename in ('app.js', 'style.css') else HERE / 'web' / filename
         content = source.read_text(encoding='utf-8')
         for original, hashed in assets.items():
@@ -93,13 +94,25 @@ def build(cache, output, extend=None):
     html = html.replace('<button id="reveal"', '<button hidden id="reveal"')
     html = html.replace('<body>', '<body class="web-disconnected">')
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
-    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.buymeacoffee.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; worker-src \'self\' blob:; frame-src https://buymeacoffee.com https://*.buymeacoffee.com; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
+    html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.buymeacoffee.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com; worker-src \'self\' blob:; frame-src https://buymeacoffee.com https://*.buymeacoffee.com; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     html = html.replace('</body>', '<script data-name="BMC-Widget" data-cfasync="false" src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js" data-id="winpo1" data-description="Support me on Buy me a coffee!" data-message="Your contribution helps cover server costs :)" data-color="#40DCA5" data-position="Right" data-x_margin="18" data-y_margin="18"></script>\n</body>')
     for original, hashed in assets.items():
         html = html.replace(original, hashed)
     (output / 'index.html').write_text(html, encoding='utf-8')
+    build_generator(output, html, assets['thumbnail-generator.js'])
     (output / '.nojekyll').write_text('')
     print(f'Built {len(games):,} games / {len(images):,} images. No image files copied. Visual download: {sum(p["bytes"] for p in parts) / 1048576:.1f} MiB.')
+
+
+def build_generator(output, html, generator_script):
+    """Expose the generator on a separate route with the same gallery and assets."""
+    html = html.replace('<head>', '<head>\n  <base href="../">', 1)
+    html = html.replace('<section hidden class="sync-panel"', (HERE / 'web' / 'generator.html').read_text(encoding='utf-8') + '\n    <section hidden class="sync-panel"', 1)
+    html = re.sub(r'(<script src="\./app\.[a-f0-9]+\.js" defer></script>)',
+                  lambda match: f'<script src="./{generator_script}" defer></script>\n  {match.group(1)}', html, count=1)
+    path = Path(output) / 'gen' / 'index.html'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding='utf-8')
 
 
 def scene_clusters(scenes, historical_count):

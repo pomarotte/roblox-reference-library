@@ -261,6 +261,7 @@ function showImage(index) {
   imageIndex = (index + selectedImages.length) % selectedImages.length;
   const image = selectedImages[imageIndex];
   saved?.showImage(image.id);
+  window.dispatchEvent(new CustomEvent('gallery:preview-image', {detail: {id: image.id, name: selectedGame.name || 'Game ' + selectedGame.id}}));
   imageSource($('preview'), image.id);
   $('preview').alt = `${selectedGame.name || 'Game ' + selectedGame.id}, saved image ${imageIndex + 1}`;
   $('image-info').textContent = `${imageIndex + 1} / ${selectedImages.length} · Saved ${savedDate(image.captured)}`;

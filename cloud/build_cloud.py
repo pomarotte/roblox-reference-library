@@ -10,7 +10,7 @@ GALLERY = HERE.parent / 'roblox-gallery'
 if not GALLERY.is_dir():
     GALLERY = HERE.parent
 sys.path.insert(0, str(GALLERY))
-from build_web import build
+from build_web import build, build_generator
 
 
 def build_cloud(output, extend=None, cache=GALLERY):
@@ -50,6 +50,9 @@ def build_cloud(output, extend=None, cache=GALLERY):
         (output / 'daily.css').write_text('.daily-view { margin-right: auto; } .toolbar .daily-view ~ .check-control { margin-right: 0; } .daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
         html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')
+    generator_html = (output / 'gen' / 'index.html').read_text(encoding='utf-8')
+    generator = re.search(r'thumbnail-generator\.[a-f0-9]+\.js', generator_html).group()
+    build_generator(output, html, generator)
 
 
 if __name__ == '__main__':

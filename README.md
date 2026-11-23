@@ -11,7 +11,7 @@ see NOTICE.md for the separate rights associated with game artwork.
 [Open the website](https://pomarotte.github.io/roblox-reference-library/), download and extract
 the original **Everything** dataset from [frrazers tools](https://tools.frrazers.com/dataset/),
 then choose its folder containing **icons** and **thumbs**. No application installation or local
-server is needed. Image files are read on the visitor's computer; they are never uploaded or changed.
+server is needed. Image files are read on the visitor's computer and are not changed. Selected references are sent to Google only when you use thumbnail generation.
 Chrome and Edge can remember the folder with permission; other desktop browsers can use the
 standard folder picker and select it again on each visit. Partial collections show available images
 only, with missing files reported. The browser must support directory selection and gzip decompression.
@@ -87,6 +87,10 @@ thumbnails regardless of the current filters. Reconnect the original dataset fol
 Original filenames are preserved directly in the ZIP, without subfolders. Desktop browsers with a
 file-save picker stream the archive to disk; other browsers support exports up to 512 MB.
 Split collections above 4 GB or 65,535 files into smaller exports. Downloads do not modify originals.
+
+## Generate a thumbnail (website)
+
+Open the generator at [rolibrary.win/gen](https://www.rolibrary.win/gen). Close the generator panel to browse the gallery, open an image and choose **Add as reference**; repeat for up to five images. Choose **Create thumbnail** to reopen the panel. You can also upload your own reference images there; uploads are temporary and are not saved. Enter a Gemini API key and scene description, and generate. Your supplied Roblox GFX prompt is included automatically. The key stays in the current page and is sent directly to Google along with your description and selected reference images. Google may charge your API account. Use reference images you have permission to send. Download the result before closing the page. Generation requires internet access and does not train a model.
 
 ## Find similar
 
