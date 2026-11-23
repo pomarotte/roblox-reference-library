@@ -35,3 +35,10 @@
 .thumbnail-collection-images button[aria-pressed="true"] { border-color: #e8c681; }
 .thumbnail-collection-images button[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 4px; right: 4px; padding: 0 5px; border-radius: 4px; background: #e8c681; color: #181b20; }
 .thumbnail-collection-images img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; }
+
+.thumbnail-reference { display: block; border: 1px solid #393939; border-radius: 8px; padding: 10px; margin: 8px 0; }
+.thumbnail-reference-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.thumbnail-reference-tags { border: 0; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.thumbnail-reference-tags legend { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.thumbnail-reference-tags label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
+#thumbnail-form .thumbnail-reference-tags input { width: auto; margin: 0; }
