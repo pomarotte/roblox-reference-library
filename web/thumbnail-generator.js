@@ -6,9 +6,9 @@
     'Visual style': 'rendering technique, textures, level of realism, and outlines',
     'Composition': 'framing, camera angle, subject placement, scale, and layout',
     'Environment': 'setting, background, and environmental details',
-    'Character': 'subject design, anatomy, and identifying features',
-    'Lighting': 'lighting direction, mood, and shadows',
-    'Colors': 'color palette and color treatment'
+    'Character': 'the exact subject identity, silhouette, anatomy, head and face, distinctive features, clothing, and colors; replace subjects from other references with this character',
+    'Lighting': 'match exposure and brightness, light sources and direction, shadow depth, and contrast; preserve a dark image as dark',
+    'Colors': 'match dominant hues, saturation, darkness, and overall color balance; do not brighten or add unrelated colors'
   };
   let resultUrl, uploadId = 0, collections = [];
   const host = window.galleryHost;
@@ -201,7 +201,7 @@
       if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
       const prompt = await promptResponse.text();
       const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${$('thumbnail-concept').value.trim()}`}];
-      const selected = [...references];
+      const selected = [...references].map(([id, reference]) => [id, {...reference, tags: new Set(reference.tags)}]);
       if (selected.some(([, reference]) => !reference.tags.size)) {
         throw new Error('Choose at least one tag for each reference image.');
       }
@@ -230,6 +230,15 @@
         if (!response.ok) throw new Error('Could not load the face references. Please try again.');
         const dataUrl = await asDataUrl(await response.blob());
         parts.push({inlineData: {mimeType: 'image/png', data: dataUrl.split(',')[1]}});
+      }
+      const assigned = Object.keys(tagDescriptions).flatMap(tag => {
+        const images = selected.map(([, reference], index) => ({reference, number: index + 1}))
+          .filter(({reference}) => reference.tags.has(tag));
+        if (!images.length) return [];
+        return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
+      });
+      if (assigned.length) {
+        parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. For Lighting and Colors assignments, preserve the assigned image's exposure, brightness, shadows, and palette throughout the output. Do not let other reference images override these assigned aspects.`});
       }
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
         method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},

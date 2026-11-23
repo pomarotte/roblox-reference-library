@@ -107,9 +107,15 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls[0].contents[0].parts[2].inlineData.data, 'YQ==');
   assert.equal(calls[0].contents[0].parts[2].inlineData.mimeType, 'image/webp');
   assert.match(calls[0].contents[0].parts[3].text, /filename "my-reference.png"/);
-  assert.match(calls[0].contents[0].parts[3].text, /Character: subject design/);
+  assert.match(calls[0].contents[0].parts[3].text, /Character: the exact subject identity/);
   assert.equal(calls[0].contents[0].parts[4].inlineData.mimeType, 'image/png');
   assert.equal(calls[0].contents[0].parts.filter(part => part.inlineData).length, 8);
+  const finalInstructions = calls[0].contents[0].parts.at(-1).text;
+  assert.match(finalInstructions, /Composition: reference image 1/);
+  assert.match(finalInstructions, /Environment: reference image 1/);
+  assert.match(finalInstructions, /Character: reference image 2/);
+  assert.match(finalInstructions, /replace characters from composition or style images/);
+  assert.match(finalInstructions, /preserve the assigned image's exposure/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready.');
   element('thumbnail-upload').handlers.change({target: {files: Array(5).fill(file), value: 'selected'}});
