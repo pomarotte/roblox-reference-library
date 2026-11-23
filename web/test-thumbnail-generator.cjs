@@ -10,10 +10,14 @@ const calls = [];
 class Reader { readAsDataURL(file) { this.result = `data:${file.type};base64,YQ==`; this.onload(); } }
 const document = {getElementById: element, createElement: () => element(Symbol())};
 const storage = new Map([['rolibrary-gemini-api-key', 'previous-key']]);
+let finishCatalogue;
+const ready = new Promise(resolve => { finishCatalogue = resolve; });
+const previewRequests = [];
 const window = {
   localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)},
   addEventListener(type, fn) {events[type] = fn;},
   galleryHost: {
+    ready,
     saved: {
       referenceCollections: () => [
         {id: 'favorites', name: 'Favorites', images: [12]},
@@ -22,10 +26,15 @@ const window = {
       referenceName: id => `Saved image ${id}`
     },
     imageFile(id) {assert.equal(id, 12); return {type: 'image/webp', size: 1};},
-    imageSource() {}
+    imageSource(image, id) { previewRequests.push(id); image.src = `fixture-${id}.webp`; }
   }
 };
-class IntersectionObserver {observe() {} disconnect() {}}
+class IntersectionObserver {
+  constructor(callback) { this.callback = callback; }
+  observe(target) { this.callback([{target, isIntersecting: true}]); }
+  unobserve() {}
+  disconnect() {}
+}
 class Option {constructor(label, value) {Object.assign(this, {label, value});}}
 const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: {createObjectURL: () => 'blob:result', revokeObjectURL() {}}, fetch: async (url, options) => {
   if (!options) return {ok: true, text: async () => 'background prompt'};
@@ -36,7 +45,15 @@ const context = {document, window, IntersectionObserver, Option, FileReader: Rea
 }};
 vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), context);
 (async () => {
-  events.DOMContentLoaded();
+  const opening = events.DOMContentLoaded();
+  assert.equal(element('thumbnail-dialog').open, true);
+  assert.equal(element('thumbnail-collection').disabled, true);
+  assert.deepEqual(previewRequests, []);
+  finishCatalogue();
+  await opening;
+  assert.equal(element('thumbnail-collection').disabled, false);
+  assert.deepEqual(previewRequests, [12]);
+  assert.equal(element('thumbnail-collection-images').children[0].children[0].src, 'fixture-12.webp');
   const keyInput = element('thumbnail-key');
   assert.equal(keyInput.value, 'previous-key');
   element('thumbnail-forget-key').handlers.click();

@@ -204,6 +204,7 @@
     return file;
   }
   window.galleryHost = {
+    ready,
     imageFile,
     searchImage: file => rpc('reference', file),
     saved: window.galleryCollections.initialize({getFile: imageFile, getImage: id => images?.get(id)}),

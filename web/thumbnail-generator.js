@@ -99,7 +99,19 @@
     update();
   }
 
-  function openGenerator() {
+  async function openGenerator() {
+    const dialog = $('thumbnail-dialog');
+    const help = $('thumbnail-collection-help');
+    dialog.showModal();
+    picker.disabled = true;
+    help.textContent = 'Loading collection previews…';
+    try {
+      await host.ready;
+    } catch {
+      help.textContent = 'Collection previews could not load. Reload the page or upload your own references.';
+      return;
+    }
+    if (!dialog.open) return;
     collections = host.saved?.referenceCollections() || [];
     const previous = picker.value;
     picker.replaceChildren(...collections.map(collection =>
@@ -107,7 +119,6 @@
     if (collections.some(collection => collection.id === previous)) picker.value = previous;
     else picker.value = (collections.find(collection => collection.images.length) || collections[0])?.id || '';
     picker.disabled = !collections.length;
-    $('thumbnail-dialog').showModal();
     showCollection();
   }
 
