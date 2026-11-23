@@ -7,7 +7,7 @@ function failure(error, status) {
 }
 
 async function get(url) {
-  return fetch(url, {redirect: 'error', signal: AbortSignal.timeout(8000)});
+  return fetch(url, {redirect: 'manual', signal: AbortSignal.timeout(8000)});
 }
 
 export default {
