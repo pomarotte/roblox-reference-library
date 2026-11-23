@@ -205,7 +205,12 @@
       if (selected.some(([, reference]) => !reference.tags.size)) {
         throw new Error('Choose at least one tag for each reference image.');
       }
-      for (const [index, [id, reference]] of selected.entries()) {
+      // Keep selection order within each group so the first reference for each tag remains primary.
+      const ordered = [
+        ...selected.filter(([, reference]) => reference.tags.has('Character')),
+        ...selected.filter(([, reference]) => !reference.tags.has('Character'))
+      ];
+      for (const [index, [id, reference]] of ordered.entries()) {
         const file = reference.file || await host.imageFile(id);
         if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
         const dataUrl = await asDataUrl(file);
@@ -217,22 +222,24 @@
         parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Do not copy text or lettering.`});
         parts.push({inlineData: {mimeType: match[1], data: match[2]}});
       }
-      parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
-      for (let i = 1; i <= 3; i++) {
-        const response = await fetch(`./character-references/character-${i}.jpeg`);
-        if (!response.ok) throw new Error('Could not load the character references. Please try again.');
-        const dataUrl = await asDataUrl(await response.blob());
-        parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
-      }
-      parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the requested visual style, not the rendering style of these sheets. Do not copy the sheet layout.'});
-      for (let i = 1; i <= 3; i++) {
-        const response = await fetch(`./character-references/faces-${i}.png`);
-        if (!response.ok) throw new Error('Could not load the face references. Please try again.');
-        const dataUrl = await asDataUrl(await response.blob());
-        parts.push({inlineData: {mimeType: 'image/png', data: dataUrl.split(',')[1]}});
+      if (!selected.some(([, reference]) => reference.tags.has('Character'))) {
+        parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
+        for (let i = 1; i <= 3; i++) {
+          const response = await fetch(`./character-references/character-${i}.jpeg`);
+          if (!response.ok) throw new Error('Could not load the character references. Please try again.');
+          const dataUrl = await asDataUrl(await response.blob());
+          parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
+        }
+        parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the requested visual style, not the rendering style of these sheets. Do not copy the sheet layout.'});
+        for (let i = 1; i <= 3; i++) {
+          const response = await fetch(`./character-references/faces-${i}.png`);
+          if (!response.ok) throw new Error('Could not load the face references. Please try again.');
+          const dataUrl = await asDataUrl(await response.blob());
+          parts.push({inlineData: {mimeType: 'image/png', data: dataUrl.split(',')[1]}});
+        }
       }
       const assigned = Object.keys(tagDescriptions).flatMap(tag => {
-        const images = selected.map(([, reference], index) => ({reference, number: index + 1}))
+        const images = selected.map((entry, index) => ({reference: entry[1], selectionIndex: index, number: ordered.indexOf(entry) + 1}))
           .filter(({reference}) => reference.tags.has(tag));
         if (!images.length) return [];
         return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
