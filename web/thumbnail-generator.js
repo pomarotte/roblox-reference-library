@@ -14,7 +14,7 @@
     'Logo': 'place the complete referenced logo, preserving its graphic mark and any lettering, spelling, and typography that are part of the logo, even when other text is disabled',
     'Text style': 'when text is enabled, use the typeface, weight, color, outline and effects as inspiration for the requested wording'
   };
-  let result, resultUrl, uploadId = 0, collections = [];
+  let result, resultUrl, nextImageNumber = 0, collections = [];
   const host = window.galleryHost;
   const keyInput = $('thumbnail-key');
   const keyStorage = 'rolibrary-gemini-api-key';
@@ -43,6 +43,8 @@
   const picker = $('thumbnail-collection');
   const grid = $('thumbnail-collection-images');
   const gameGrid = $('thumbnail-game-images');
+  const conceptInput = $('thumbnail-concept');
+  const mentionPreview = $('thumbnail-mention-preview');
   const allowText = $('thumbnail-allow-text');
   allowText.addEventListener('change', () => { $('thumbnail-wording-field').hidden = !allowText.checked; });
   const previewObserver = new IntersectionObserver(entries => {
@@ -52,6 +54,64 @@
       host.imageSource(entry.target, Number(entry.target.dataset.imageId));
     }
   });
+
+  function referenceMentions(text) {
+    return text.matchAll(/@Image ([1-9]\d*)(?![\p{L}\p{N}_])/giu);
+  }
+
+  function updateMentionPreview() {
+    const {value, selectionStart, selectionEnd} = conceptInput;
+    const mention = document.activeElement === conceptInput && [...referenceMentions(value)].find(match => {
+      const end = match.index + match[0].length;
+      return (match.index <= selectionStart && selectionEnd <= end) ||
+        (selectionStart === selectionEnd && selectionEnd === end + 1 && value[end] === ' ');
+    });
+    const reference = mention && [...references.values()].find(item => item.number === Number(mention[1]));
+    mentionPreview.hidden = !reference;
+    if (!reference) {
+      mentionPreview.replaceChildren();
+    } else if (mentionPreview.textContent !== reference.name) {
+      mentionPreview.replaceChildren(referenceImage(reference), reference.name);
+    }
+  }
+
+  for (const event of ['input', 'select', 'selectionchange', 'click', 'focus', 'blur']) {
+    conceptInput.addEventListener(event, updateMentionPreview);
+  }
+
+  function insertMention(reference) {
+    const {value, selectionStart, selectionEnd} = conceptInput;
+    const before = selectionStart && !/\s/.test(value[selectionStart - 1]) ? ' ' : '';
+    const atEnd = selectionEnd === value.length;
+    const after = atEnd || /[\p{L}\p{N}_@]/u.test(value[selectionEnd]) ? ' ' : '';
+    const mention = `@${reference.name}`;
+    conceptInput.setRangeText(`${before}${mention}${after}`, selectionStart, selectionEnd, 'end');
+    conceptInput.focus();
+    const end = selectionStart + before.length + mention.length + (atEnd ? 1 : 0);
+    conceptInput.setSelectionRange(end, end);
+    updateMentionPreview();
+  }
+
+  function referenceImage(reference) {
+    const image = document.createElement('img');
+    image.className = 'thumbnail-reference-preview';
+    image.alt = '';
+    if (reference.url) {
+      image.src = reference.url;
+    } else if (reference.file) {
+      reference.previewUrl ||= URL.createObjectURL(reference.file);
+      image.src = reference.previewUrl;
+    } else {
+      host.imageSource(image, reference.id);
+    }
+    return image;
+  }
+
+  function addReference(id, reference) {
+    const number = ++nextImageNumber;
+    id ??= `upload-${number}`;
+    references.set(id, {...reference, id, number, name: `Image ${number}`});
+  }
 
   function update() {
     const count = `${references.size} of 5 references selected`;
@@ -68,17 +128,12 @@
       const {name, tags} = reference;
       const row = document.createElement('div');
       row.className = 'thumbnail-reference';
-      const image = document.createElement('img');
-      image.className = 'thumbnail-reference-preview';
-      image.alt = `Selected reference: ${name}`;
-      if (reference.url) {
-        image.src = reference.url;
-      } else if (reference.file) {
-        if (!reference.previewUrl) reference.previewUrl = URL.createObjectURL(reference.file);
-        image.src = reference.previewUrl;
-      } else {
-        host.imageSource(image, id);
-      }
+      const mentionButton = document.createElement('button');
+      mentionButton.type = 'button';
+      mentionButton.className = 'secondary thumbnail-mention-button';
+      mentionButton.setAttribute('aria-label', `Insert ${name} in description`);
+      mentionButton.append(referenceImage(reference), name);
+      mentionButton.addEventListener('click', () => insertMention(reference));
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'text-button';
@@ -92,7 +147,7 @@
       });
       const heading = document.createElement('div');
       heading.className = 'thumbnail-reference-heading';
-      heading.append(image, button);
+      heading.append(mentionButton, button);
       const tagsGroup = document.createElement('fieldset');
       tagsGroup.className = 'thumbnail-reference-tags';
       const legend = document.createElement('legend');
@@ -115,12 +170,13 @@
       row.append(heading, tagsGroup);
       $('thumbnail-references').append(row);
     }
+    updateMentionPreview();
   }
 
   function toggleReference(id, reference) {
     const status = $('thumbnail-status');
     if (references.has(id)) references.delete(id);
-    else if (references.size < 5) references.set(id, reference);
+    else if (references.size < 5) addReference(id, reference);
     else {
       status.textContent = 'Remove a reference before adding another. The limit is five.';
       return;
@@ -145,7 +201,7 @@
       tile.setAttribute('aria-label', name);
       image.alt = '';
       tile.append(image);
-      tile.addEventListener('click', () => toggleReference(id, {name, tags: new Set(['Visual style', 'Composition'])}));
+      tile.addEventListener('click', () => toggleReference(id, {tags: new Set(['Visual style', 'Composition'])}));
       grid.append(tile);
       previewObserver.observe(image);
     }
@@ -207,7 +263,7 @@
         image.src = url;
         image.loading = 'lazy';
         tile.append(image);
-        tile.addEventListener('click', () => toggleReference(url, {name, url, tags: new Set(['Visual style', 'Composition'])}));
+        tile.addEventListener('click', () => toggleReference(url, {url, tags: new Set(['Visual style', 'Composition'])}));
         return tile;
       }));
       update();
@@ -227,7 +283,7 @@
     } else if (files.some(file => !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024 || !file.size)) {
       status.textContent = 'Choose nonempty PNG, JPEG, WEBP, or GIF images under 10 MB each.';
     } else {
-      for (const file of files) references.set(`upload-${++uploadId}`, {name: file.name, file, tags: new Set(['Character'])});
+      for (const file of files) addReference(null, {file, tags: new Set(['Character'])});
       status.textContent = '';
       update();
     }
@@ -260,6 +316,15 @@
     } finally { bitmap.close(); }
   }
   async function generationParts(concept, textEnabled, wording) {
+    const selected = [...references.values()].map(reference => ({...reference, tags: new Set(reference.tags)}));
+    for (const mention of referenceMentions(concept)) {
+      if (!selected.some(reference => reference.number === Number(mention[1]))) {
+        throw new Error(`Remove or replace ${mention[0]} in the description. That image is no longer selected.`);
+      }
+    }
+    if (selected.some(reference => !reference.tags.size)) {
+      throw new Error('Choose at least one tag for each reference image.');
+    }
     const promptResponse = await fetch('./thumbnail-prompt.txt');
     if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
     const prompt = await promptResponse.text();
@@ -267,21 +332,20 @@
       ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
         : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
       : 'Do not add titles, captions, signage, watermarks, or other text. Preserve any lettering that is part of a Logo-tagged reference within the logo itself. Do not repeat that lettering elsewhere.';
-    const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${concept}\n\nTEXT SETTINGS:\n${textInstruction}`}];
-    const selected = [...references].map(([id, reference]) => [id, {...reference, tags: new Set(reference.tags)}]);
-    if (selected.some(([, reference]) => !reference.tags.size)) {
-      throw new Error('Choose at least one tag for each reference image.');
-    }
+    const scene = concept || (selected.length
+      ? 'Create a coherent Roblox thumbnail using the attached images according to their reference tags. Fill in unspecified scene details to fit those references.'
+      : 'Create an original Roblox game thumbnail with a clear subject, action, and setting.');
+    const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${scene}\n\nTEXT SETTINGS:\n${textInstruction}`}];
     // Keep selection order within each group so the first reference for each tag remains primary.
     const ordered = [
-      ...selected.filter(([, reference]) => reference.tags.has('Character')),
-      ...selected.filter(([, reference]) => !reference.tags.has('Character'))
+      ...selected.filter(reference => reference.tags.has('Character')),
+      ...selected.filter(reference => !reference.tags.has('Character'))
     ];
-    const hasCharacter = ordered[0]?.[1].tags.has('Character');
+    const hasCharacter = ordered[0]?.tags.has('Character');
     if (hasCharacter) {
-      parts.push({text: 'Use the first attached image as the subject to restage in the requested thumbnail. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position.'});
+      parts.push({text: `By default, use @${ordered[0].name} as the subject to restage. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position. Follow any explicit character assignments in the description.`});
     }
-    for (const [index, [id, reference]] of ordered.entries()) {
+    for (const reference of ordered) {
       let file = reference.file;
       if (reference.url) {
         const response = await fetch(reference.url, {cache: 'no-store'});
@@ -289,7 +353,7 @@
         const downloaded = await response.blob();
         file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
       }
-      if (!file) file = await host.imageFile(id);
+      if (!file) file = await host.imageFile(reference.id);
       if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
       const dataUrl = await asDataUrl(file);
       const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
@@ -297,7 +361,7 @@
       const instructions = Object.keys(tagDescriptions)
         .filter(tag => reference.tags.has(tag))
         .map(tag => `${tag}: ${tagDescriptions[tag]}`);
-      parts.push({text: `Reference image ${index + 1}, filename ${JSON.stringify(reference.name)}. Use this image for: ${instructions.join('; ')}. Apply only these selected aspects from this image. Follow the text settings above.`});
+      parts.push({text: `@${reference.name} refers to the single image attached immediately after this note. Default uses: ${instructions.join('; ')}. Use this image as directed by any explicit mention in the description. Follow the text settings above.`});
       parts.push({inlineData: {mimeType: match[1], data: match[2]}});
     }
     if (!hasCharacter) {
@@ -317,16 +381,15 @@
       }
     }
     const assigned = Object.keys(tagDescriptions).flatMap(tag => {
-      const images = selected.map(entry => ({reference: entry[1], number: ordered.indexOf(entry) + 1}))
-        .filter(({reference}) => reference.tags.has(tag));
+      const images = selected.filter(reference => reference.tags.has(tag)).map(reference => `@${reference.name}`);
       if (!images.length) return [];
-      return [`${tag}: reference image ${images[0].number}${images.length > 1 ? ` (supporting: ${images.slice(1).map(image => image.number).join(', ')})` : ''}`];
+      return [`${tag}: ${images[0]}${images.length > 1 ? ` (supporting: ${images.slice(1).join(', ')})` : ''}`];
     });
-    if (selected.some(([, reference]) => reference.tags.has('Composition'))) {
-      parts.push({text: 'Keep the primary Composition camera viewpoint. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
+    if (selected.some(reference => reference.tags.has('Composition'))) {
+      parts.push({text: 'Keep the primary Composition camera viewpoint unless the description assigns a different viewpoint or Composition image. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
     }
     if (assigned.length) {
-      parts.push({text: `Final reference assignment: ${assigned.join('; ')}. Combine these assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject. Do not let other reference images override these assigned aspects.`});
+      parts.push({text: `Default reference assignments: ${assigned.join('; ')}. Explicit uses of named images in the description take priority for the specified aspects. Combine the remaining assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject.`});
     }
     return parts;
   }
@@ -382,12 +445,12 @@
     if (generate.disabled) return;
     const editing = event.submitter === applyEdit;
     const key = keyInput.value.trim();
-    const concept = $('thumbnail-concept').value.trim();
+    const concept = conceptInput.value.trim();
     const changes = editInstructions.value.trim();
     const imageSize = $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
     const [width, height] = imageSize === '1K' ? [960, 540] : [1920, 1080];
-    if (!key || (editing ? !result || !changes : !concept)) {
-      status.textContent = editing ? 'Enter an API key and describe what to change.' : 'Enter an API key and thumbnail description.';
+    if (!key || (editing && (!result || !changes))) {
+      status.textContent = editing ? 'Enter an API key and describe what to change.' : 'Enter an API key.';
       return;
     }
     setBusy(true);

@@ -45,6 +45,9 @@
 #thumbnail-form .thumbnail-reference-tags input { width: auto; margin: 0; }
 
 .thumbnail-reference-preview { display: block; width: 150px; max-width: 65%; height: 85px; object-fit: contain; background: #111; border-radius: 6px; }
+.thumbnail-mention-button { display: inline-flex; align-items: center; gap: 10px; min-width: 0; padding: 4px 8px 4px 4px; }
+#thumbnail-mention-preview:not([hidden]) { display: flex; align-items: center; gap: 8px; justify-self: start; padding: 4px 8px 4px 4px; background: #141414; border: 1px solid #393939; border-radius: 8px; font-size: 13px; }
+#thumbnail-mention-preview .thumbnail-reference-preview { width: 72px; height: 41px; }
 .thumbnail-game-lookup { display: flex; flex-wrap: wrap; gap: 8px; }
 #thumbnail-form .thumbnail-game-lookup input { flex: 1; min-width: 180px; }
 #thumbnail-form .check-control input { width: auto; }

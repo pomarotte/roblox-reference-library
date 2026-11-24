@@ -40,6 +40,8 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('<base href="../">', generator_html)
             self.assertEqual(len(list((output / 'character-references').iterdir())), 6)
             self.assertIn('id="thumbnail-upload"', generator_html)
+            self.assertIn('id="thumbnail-mention-preview" hidden', generator_html)
+            self.assertNotRegex(generator_html, r'<textarea id="thumbnail-concept"[^>]*\brequired\b')
             self.assertIn('id="thumbnail-collection"', generator_html)
             self.assertIn('id="thumbnail-game-url"', generator_html)
             self.assertIn('id="thumbnail-allow-text"', generator_html)

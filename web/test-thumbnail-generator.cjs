@@ -3,7 +3,16 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const elements = new Map(), events = {};
 function element(id) {
-  if (!elements.has(id)) elements.set(id, {id, value: '', hidden: false, children: [], handlers: {}, dataset: {}, attributes: {}, addEventListener(type, fn) {this.handlers[type] = fn;}, replaceChildren(...nodes) {this.children = nodes;}, append(...nodes) {this.children.push(...nodes);}, setAttribute(name, value) {this.attributes[name] = value;}, showModal() {this.open = true;}, close() {this.open = false;}, focus() {}});
+  if (!elements.has(id)) elements.set(id, {
+    id, value: '', hidden: false, children: [], handlers: {}, dataset: {}, attributes: {}, selectionStart: 0, selectionEnd: 0,
+    addEventListener(type, fn) {this.handlers[type] = fn;},
+    replaceChildren(...nodes) {this.children = nodes;},
+    append(...nodes) {this.children.push(...nodes);},
+    setAttribute(name, value) {this.attributes[name] = value;},
+    showModal() {this.open = true;}, close() {this.open = false;}, focus() {document.activeElement = this;},
+    setRangeText(text, start, end) {this.value = this.value.slice(0, start) + text + this.value.slice(end);},
+    setSelectionRange(start, end) {this.selectionStart = start; this.selectionEnd = end;}
+  });
   return elements.get(id);
 }
 const calls = [];
@@ -124,9 +133,36 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   assert.equal(element('thumbnail-count').textContent, '(2)');
   const selectedRows = element('thumbnail-references').children;
-  assert.equal(selectedRows[0].children[0].children[0].src, 'fixture-12.webp');
-  assert.equal(selectedRows[1].children[0].children[0].src, 'blob:result');
-  assert.match(selectedRows[1].children[0].children[0].alt, /my-reference.png/);
+  const savedMention = selectedRows[0].children[0].children[0];
+  const uploadMention = selectedRows[1].children[0].children[0];
+  assert.equal(savedMention.children[0].src, 'fixture-12.webp');
+  assert.equal(savedMention.children[1], 'Image 2');
+  assert.equal(uploadMention.children[0].src, 'blob:result');
+  assert.equal(uploadMention.children[1], 'Image 3');
+  const concept = element('thumbnail-concept');
+  const mentionPreview = element('thumbnail-mention-preview');
+  concept.value = 'Set the scene in PLACE at night';
+  concept.setSelectionRange(17, 22);
+  savedMention.handlers.click();
+  assert.equal(document.activeElement, concept);
+  assert.equal(concept.value, 'Set the scene in @Image 2 at night');
+  assert.equal(mentionPreview.hidden, false);
+  assert.equal(mentionPreview.children[0].src, 'fixture-12.webp');
+  concept.setSelectionRange(concept.value.length, concept.value.length);
+  uploadMention.handlers.click();
+  assert.ok(concept.value.endsWith('@Image 3 '));
+  assert.equal(concept.selectionStart, concept.value.length);
+  assert.equal(mentionPreview.children[1], 'Image 3');
+  concept.setSelectionRange(17, 25);
+  concept.handlers.select();
+  assert.equal(mentionPreview.children[1], 'Image 2');
+  concept.setSelectionRange(concept.value.length - 9, concept.value.length - 1);
+  concept.handlers.selectionchange();
+  assert.equal(mentionPreview.children[1], 'Image 3');
+  assert.equal(mentionPreview.children[0].src, 'blob:result');
+  concept.setSelectionRange(0, 3);
+  concept.handlers.select();
+  assert.equal(mentionPreview.hidden, true);
   const galleryTags = selectedRows[0].children[1].children;
   const environment = galleryTags[3].children[0];
   environment.checked = true;
@@ -135,33 +171,35 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   const character = uploadTags[4].children[0];
   character.checked = false;
   character.handlers.change();
-  element('thumbnail-concept').value = 'a dragon';
+  concept.value = 'Use @Image 3 as the dragon and @Image 2 for the setting.';
   element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 0);
   assert.match(element('thumbnail-status').textContent, /at least one tag/);
   character.checked = true;
   character.handlers.change();
-  element('thumbnail-concept').value = 'a dragon'; element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationConfig.imageConfig.imageSize, '2K');
   const [background, characterBrief, ...labeledImages] = calls[0].contents[0].parts;
-  assert.match(characterBrief.text, /first attached image as the subject to restage/);
+  assert.match(background.text, /Use @Image 3 as the dragon and @Image 2 for the setting/);
+  assert.match(characterBrief.text, /use @Image 3 as the subject to restage/);
   const requestParts = [background, ...labeledImages];
-  assert.match(requestParts[1].text, /filename "my-reference.png"/);
+  assert.match(requestParts[1].text, /^@Image 3 refers to the single image attached immediately after/);
   assert.match(requestParts[1].text, /Character: the exact subject identity/);
   assert.equal(requestParts[2].inlineData.mimeType, 'image/png');
+  assert.match(requestParts[3].text, /^@Image 2 refers to the single image attached immediately after/);
   assert.match(requestParts[3].text, /Composition: framing/);
   assert.match(requestParts[3].text, /Environment: setting/);
   assert.doesNotMatch(requestParts[3].text, /Character:/);
   assert.equal(requestParts[4].inlineData.mimeType, 'image/webp');
   assert.equal(requestParts.filter(part => part.inlineData).length, 2);
   const finalInstructions = requestParts.at(-1).text;
-  assert.match(finalInstructions, /Composition: reference image 2/);
+  assert.match(finalInstructions, /Composition: @Image 2/);
   assert.ok(requestParts.some(part => part.text?.includes('frame the scene through the player’s eyes')));
-  assert.match(finalInstructions, /Environment: reference image 2/);
-  assert.match(finalInstructions, /Character: reference image 1/);
+  assert.match(finalInstructions, /Environment: @Image 2/);
+  assert.match(finalInstructions, /Character: @Image 3/);
+  assert.match(finalInstructions, /Explicit uses of named images in the description take priority/);
   assert.match(finalInstructions, /replace characters from composition or style images/);
   assert.match(finalInstructions, /match the overall brightness and contrast of the Colors image/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
@@ -170,10 +208,15 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(element('thumbnail-upscale').hidden, true);
   assert.deepEqual(exportsMade[0], {width: 1920, height: 1080, rectangle: [0, -4, 1920, 1088], type: 'image/png'});
   selectedRows[1].children[0].children[1].handlers.click();
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  assert.equal(calls.length, 1);
+  assert.match(element('thumbnail-status').textContent, /Remove or replace @Image 3/);
+  concept.value = '  ';
   element('thumbnail-resolution').value = '1K';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 2);
   assert.equal(calls[1].generationConfig.imageConfig.imageSize, '1K');
+  assert.match(calls[1].contents[0].parts[0].text, /using the attached images according to their reference tags/);
   assert.equal(calls[1].contents[0].parts.filter(part => part.inlineData).length, 7);
   assert.match(calls[1].contents[0].parts[3].text, /character reference sheets/);
   assert.deepEqual(exportsMade[1], {width: 960, height: 540, rectangle: [0, -2, 960, 544], type: 'image/png'});
@@ -205,7 +248,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   const parts = calls[2].contents[0].parts;
   assert.match(parts[0].text, /exact text.*"Race Night!"/);
-  const gameReference = parts.findIndex(part => part.text?.includes('Roblox thumbnail 1'));
+  const gameReference = parts.findIndex(part => part.text?.startsWith('@Image 5 refers'));
   assert.match(parts[gameReference].text, /Object: .*Logo: .*Text style: /);
   assert.equal(parts[gameReference + 1].inlineData.mimeType, 'image/webp');
   allow.checked = false;
@@ -260,6 +303,10 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   await submitEdit();
   assert.equal(upscaled.hidden, true);
   assert.equal(upscale.hidden, false);
+  for (const row of element('thumbnail-references').children) row.children[0].children[1].handlers.click();
+  assert.equal(element('thumbnail-count').textContent, '(0)');
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  assert.match(calls.at(-1).contents[0].parts[0].text, /Create an original Roblox game thumbnail/);
   assert.deepEqual([...storage], [['rolibrary-gemini-api-key', 'key']]);
   console.log('Temporary references, logo lettering, exact PNG export, iterative edits, and AI upscale controls passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});
