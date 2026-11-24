@@ -4,7 +4,6 @@ from contextlib import closing, contextmanager
 import gzip
 import hashlib
 import json
-import re
 from pathlib import Path
 import shutil
 import sqlite3
@@ -97,20 +96,20 @@ def build(cache, output, extend=None):
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
     html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.rbxcdn.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com https://references.rolibrary.win https://*.rbxcdn.com https://*.roblox.com; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     html = html.replace('</main>', '<p><a class="secondary" href="https://buymeacoffee.com/winpo1" target="_blank" rel="noopener noreferrer">Support RoLibrary ↗</a></p>\n</main>', 1)
+    html = html.replace('</body>', (HERE / 'web' / 'generator.html').read_text(encoding='utf-8') + '\n</body>', 1)
+    html = html.replace('<script src="./app.js"', '<script src="./thumbnail-generator.js" defer></script>\n  <script src="./app.js"', 1)
     for original, hashed in assets.items():
         html = html.replace(original, hashed)
     (output / 'index.html').write_text(html, encoding='utf-8')
-    build_generator(output, html, assets['thumbnail-generator.js'])
+    build_generator(output, html)
     (output / '.nojekyll').write_text('')
     print(f'Built {len(games):,} games / {len(images):,} images. No image files copied. Visual download: {sum(p["bytes"] for p in parts) / 1048576:.1f} MiB.')
 
 
-def build_generator(output, html, generator_script):
-    """Expose the generator on a separate route with the same gallery and assets."""
+def build_generator(output, html):
+    """Keep the direct generator route and open its drawer on arrival."""
     html = html.replace('<head>', '<head>\n  <base href="../">', 1)
-    html = html.replace('<section hidden class="sync-panel"', (HERE / 'web' / 'generator.html').read_text(encoding='utf-8') + '\n    <section hidden class="sync-panel"', 1)
-    html = re.sub(r'(<script src="\./app\.[a-f0-9]+\.js" defer></script>)',
-                  lambda match: f'<script src="./{generator_script}" defer></script>\n  {match.group(1)}', html, count=1)
+    html = html.replace('<button id="thumbnail-open"', '<button id="thumbnail-open" data-open-on-load', 1)
     path = Path(output) / 'gen' / 'index.html'
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding='utf-8')

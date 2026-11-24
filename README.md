@@ -73,13 +73,13 @@ SHA256SUMS.txt contains the application-download checksum.
 - Image filenames are rescanned on launch. An incomplete or incompatible source dataset is detected before
   any cached records are removed.
 
-## Favorites and collections (website)
+## Collections (website)
 
-Use the heart on an image to favorite it, or **+** / **Add to collection** to save that
-individual image in one or more named collections. The sidebar switches between Explore,
-Favorites, and your collections. These lists persist in this browser, including after
+Use the heart on an image or **Add to collection** in its preview to save it in one or more
+named collections. The sidebar switches between Explore and your collections.
+Collections persist in this browser, including after
 disconnecting the image folder. They do not sync across devices; clearing site data removes them.
-After choosing a collection once, **+** adds images to the last collection you used.
+After choosing a collection once, the heart adds images to the last collection you used.
 Choose **Change** in the confirmation to adjust which collections contain that image.
 
 Open a collection and choose **Download ZIP** to export all its images, including icons and
@@ -90,7 +90,9 @@ Split collections above 4 GB or 65,535 files into smaller exports. Downloads do 
 
 ## Generate a thumbnail (website)
 
-Open the generator at [rolibrary.win/gen](https://www.rolibrary.win/gen). Choose a saved collection or Favorites, then click thumbnails to select or deselect them. You can also paste a Roblox game page link or upload your own reference images. These references are temporary. Use the Object, Logo, and Text style tags to direct how the generator uses each image. Enter a Gemini API key and scene description, and generate. Text is off by default. Turn on **Allow text** and optionally enter the exact wording. Download a PNG at 1920 × 1080 or 960 × 540. The key is saved in this browser and is sent directly to Google along with your description and selected reference images when you generate. Use **Forget API key** to remove it from this browser. Google may charge your API account. Use reference images you have permission to send. Download the result before closing the page. Generation requires internet access and does not train a model.
+Open the **Image generator** tab on the right edge of Explorer. Use **Full screen** to expand it. Add an image with **+** on a thumbnail or **Add as reference** in its preview. You can also choose a saved collection, paste a Roblox game page link, or upload your own reference images. These references are temporary. Use the Object, Logo, and Text style tags to direct how the generator uses each image. Enter a Gemini API key and scene description, and generate. Text is off by default. Turn on **Allow text** and optionally enter the exact wording. Download a PNG at 1920 × 1080 or 960 × 540. The key is saved in this browser and is sent directly to Google along with your description and selected reference images when you generate. Use **Forget API key** to remove it from this browser. Google may charge your API account. Use reference images you have permission to send. Download the result before closing the page. Generation requires internet access and does not train a model.
+
+To refer to a specific character or object, choose **Add box** on a selected reference, drag around the subject, and save a name. Type `@` in the description to insert a box mention. For example, `@[Red Knight] rides ahead while @[Blue Wizard] casts a spell.`
 
 ## Find similar
 

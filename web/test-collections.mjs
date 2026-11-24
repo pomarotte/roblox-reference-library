@@ -7,8 +7,8 @@ globalThis.crypto ??= webcrypto;
 await import('./collections.js');
 const {createStore, writeZip, storageKey} = window.galleryCollections;
 const values = new Map(), storage = {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)};
+values.set(storageKey, JSON.stringify({version: 1, favorites: [2], collections: []}));
 let store = createStore(storage);
-store.favorite(2);
 const collection = store.create('Racing', 3);
 store.include(collection, 2, true);
 store.include(collection, 2, true);
@@ -25,17 +25,16 @@ store.remove(otherCollection);
 assert.equal(createStore(storage).data.lastCollection, null);
 store.include(collection, 2, true);
 assert.equal(store.data.lastCollection, collection);
-store.favorite(2);
 store.include(collection, 3, false);
 store.rename(collection, 'Motorcycles');
 assert.equal(createStore(storage).data.collections[0].name, 'Motorcycles');
 assert.deepEqual(store.data.collections[0].images, [2]);
 assert.throws(() => store.create(' '), /name/);
-assert.throws(() => store.favorite(-1), /Invalid image/);
+assert.throws(() => store.include(collection, -1, true), /Invalid image/);
 assert.throws(() => store.rename('missing', 'Name'), /no longer exists/);
 const before = store.data;
 storage.setItem = () => { throw new Error('QuotaExceededError'); };
-assert.throws(() => store.favorite(9), /storage is unavailable or full/);
+assert.throws(() => store.include(collection, 9, true), /storage is unavailable or full/);
 assert.deepEqual(store.data, before);
 assert.deepEqual(createStore(storage).data, before);
 storage.setItem = (key, value) => values.set(key, value);
@@ -69,9 +68,9 @@ await assert.rejects(() => writeZip([{name: 'huge', file: {size: 0xffffffff}}], 
 await assert.rejects(() => writeZip(files, {write() {}}, () => {}, AbortSignal.abort()), {name: 'AbortError'});
 await assert.rejects(() => writeZip(files, {write() {throw new Error('Disk full');}}), /Disk full/);
 
-values.set(storageKey, JSON.stringify({version: 1, favorites: [2], collections: []}));
+values.set(storageKey, JSON.stringify({version: 1, favorites: [2], collections: [{id: 'racing', name: 'Racing', images: [2]}]}));
 const nodes = new Map();
-const element = () => ({children: [], dataset: {}, append() {}, setAttribute() {}, replaceChildren() {},
+const element = () => ({children: [], dataset: {}, append(...nodes) { this.children.push(...nodes); }, setAttribute() {}, replaceChildren() {},
   addEventListener(type, handler) { this[type] = handler; }});
 globalThis.localStorage = storage;
 globalThis.Option = class {};
@@ -92,14 +91,15 @@ window.showSaveFilePicker = async () => ({
     return {write() {}, close() { saved = true; }};
   }
 });
-window.galleryCollections.initialize({
+const savedImages = window.galleryCollections.initialize({
   getImage: () => ({filename: 'saved.webp'}),
   getFile() {
     if (fetchFails) throw new TypeError('Failed to fetch');
     return new Blob(['image']);
   }
 });
-nodes.get('saved-view').value = 'favorites';
+assert.deepEqual(savedImages.referenceCollections(), [{id: 'collection:racing', name: 'Racing', images: [2]}]);
+nodes.get('saved-view').value = 'racing';
 nodes.get('saved-view').change();
 await nodes.get('download-collection').click();
 assert.equal(nodes.get('saved-error').textContent, 'Failed to fetch');

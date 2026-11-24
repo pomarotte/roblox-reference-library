@@ -41,10 +41,15 @@
   });
 
   const picker = $('thumbnail-collection');
+  const panel = $('thumbnail-panel');
+  const opener = $('thumbnail-open');
+  const fullscreen = $('thumbnail-fullscreen');
   const grid = $('thumbnail-collection-images');
   const gameGrid = $('thumbnail-game-images');
   const conceptInput = $('thumbnail-concept');
+  const conceptHighlight = $('thumbnail-concept-highlight');
   const mentionPreview = $('thumbnail-mention-preview');
+  const suggestions = $('thumbnail-mention-suggestions');
   const allowText = $('thumbnail-allow-text');
   allowText.addEventListener('change', () => { $('thumbnail-wording-field').hidden = !allowText.checked; });
   const previewObserver = new IntersectionObserver(entries => {
@@ -56,40 +61,95 @@
   });
 
   function referenceMentions(text) {
-    return text.matchAll(/@Image ([1-9]\d*)(?![\p{L}\p{N}_])/giu);
+    return text.matchAll(/@(?:Image ?([1-9]\d*)(?![\p{L}\p{N}_])|\[([^\]\n]+)\])/giu);
   }
 
-  function updateMentionPreview() {
+  function mentionText(item) {
+    return item.box ? `@[${item.name}]` : `@${item.name}`;
+  }
+
+  function findMention(match, items) {
+    for (const reference of items) {
+      if (reference.number === Number(match[1])) return {reference, item: reference};
+      const region = reference.regions.find(item => item.name.toLowerCase() === match[2]?.toLowerCase());
+      if (region) return {reference, item: region};
+    }
+  }
+
+  function syncConceptScroll() {
+    conceptHighlight.style.width = `${conceptInput.clientWidth}px`;
+    conceptHighlight.scrollTop = conceptInput.scrollTop;
+    conceptHighlight.scrollLeft = conceptInput.scrollLeft;
+  }
+
+  function updateDescription() {
     const {value, selectionStart, selectionEnd} = conceptInput;
-    const mention = document.activeElement === conceptInput && [...referenceMentions(value)].find(match => {
-      const end = match.index + match[0].length;
-      return (match.index <= selectionStart && selectionEnd <= end) ||
-        (selectionStart === selectionEnd && selectionEnd === end + 1 && value[end] === ' ');
-    });
-    const reference = mention && [...references.values()].find(item => item.number === Number(mention[1]));
-    mentionPreview.hidden = !reference;
-    if (!reference) {
+    const nodes = [];
+    let from = 0, selected;
+    for (const match of referenceMentions(value)) {
+      const found = findMention(match, references.values());
+      if (!found) continue;
+      const token = document.createElement('span');
+      token.textContent = match[0];
+      nodes.push(value.slice(from, match.index), token);
+      from = match.index + match[0].length;
+      if (document.activeElement === conceptInput && match.index <= selectionStart && selectionEnd <= from &&
+          selectionStart < from && selectionEnd > match.index) selected = found;
+    }
+    conceptHighlight.replaceChildren(...nodes, value.slice(from), '\u200b');
+    syncConceptScroll();
+    updateMentionPreview(selected);
+    updateSuggestions();
+  }
+
+  function updateMentionPreview(found) {
+    mentionPreview.hidden = !found;
+    if (!found) {
       mentionPreview.replaceChildren();
-    } else if (mentionPreview.textContent !== reference.name) {
-      mentionPreview.replaceChildren(referenceImage(reference), reference.name);
+    } else if (mentionPreview.textContent !== found.item.name) {
+      const {reference, item} = found;
+      const image = referenceImage(reference);
+      if (item.box) {
+        const preview = document.createElement('span');
+        preview.className = 'thumbnail-region-preview';
+        preview.append(image, regionOverlay(item.box));
+        mentionPreview.replaceChildren(preview, item.name);
+      } else {
+        mentionPreview.replaceChildren(image, item.name);
+      }
     }
   }
 
   for (const event of ['input', 'select', 'selectionchange', 'click', 'focus', 'blur']) {
-    conceptInput.addEventListener(event, updateMentionPreview);
+    conceptInput.addEventListener(event, updateDescription);
+  }
+  conceptInput.addEventListener('scroll', syncConceptScroll);
+  new ResizeObserver(syncConceptScroll).observe(conceptInput);
+
+  function updateSuggestions() {
+    if (document.activeElement !== conceptInput) return;
+    const {value, selectionStart, selectionEnd} = conceptInput;
+    const insideMention = [...referenceMentions(value)].some(match => match.index < selectionStart && selectionStart < match.index + match[0].length);
+    const query = selectionStart === selectionEnd && !insideMention && /(?:^|[^\p{L}\p{N}_])(@\[?([^\n@\[\]]*))$/u.exec(value.slice(0, selectionStart));
+    const items = query ? [...references.values()].flatMap(reference => [reference, ...reference.regions]) : [];
+    const matches = items.filter(item => item.name.toLowerCase().startsWith(query[2].toLowerCase()) &&
+      (query[1][1] !== '[' || item.box) && mentionText(item).toLowerCase() !== query[1].toLowerCase());
+    suggestions.hidden = !matches.length;
+    suggestions.replaceChildren(...matches.map(item => regionButton(mentionText(item), () =>
+      insertMention(item, selectionEnd - query[1].length, selectionEnd))));
   }
 
-  function insertMention(reference) {
-    const {value, selectionStart, selectionEnd} = conceptInput;
-    const before = selectionStart && !/\s/.test(value[selectionStart - 1]) ? ' ' : '';
+  function insertMention(item, selectionStart = conceptInput.selectionStart, selectionEnd = conceptInput.selectionEnd) {
+    const {value} = conceptInput;
+    const before = selectionStart && value[selectionStart] !== '@' && !/\s/.test(value[selectionStart - 1]) ? ' ' : '';
     const atEnd = selectionEnd === value.length;
     const after = atEnd || /[\p{L}\p{N}_@]/u.test(value[selectionEnd]) ? ' ' : '';
-    const mention = `@${reference.name}`;
+    const mention = mentionText(item);
     conceptInput.setRangeText(`${before}${mention}${after}`, selectionStart, selectionEnd, 'end');
     conceptInput.focus();
     const end = selectionStart + before.length + mention.length + (atEnd ? 1 : 0);
     conceptInput.setSelectionRange(end, end);
-    updateMentionPreview();
+    updateDescription();
   }
 
   function referenceImage(reference) {
@@ -110,8 +170,171 @@
   function addReference(id, reference) {
     const number = ++nextImageNumber;
     id ??= `upload-${number}`;
-    references.set(id, {...reference, id, number, name: `Image ${number}`});
+    references.set(id, {...reference, id, number, name: `Image ${number}`, regions: []});
   }
+
+  function regionButton(label, action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    return button;
+  }
+
+  const regionDialog = $('thumbnail-region-dialog');
+  const regionImage = $('thumbnail-region-image');
+  const regionStage = $('thumbnail-region-stage');
+  const regionName = $('thumbnail-region-name');
+  const regionStatus = $('thumbnail-region-status');
+  const regionSave = $('thumbnail-region-save');
+  const regionDelete = $('thumbnail-region-delete');
+  const draftOverlay = $('thumbnail-region-draft');
+  let regionEditor;
+
+  function paintBox(element, {x, y, width, height}) {
+    element.style.left = `${x * 100}%`;
+    element.style.top = `${y * 100}%`;
+    element.style.width = `${width * 100}%`;
+    element.style.height = `${height * 100}%`;
+  }
+
+  function regionOverlay(box, name = '') {
+    const overlay = document.createElement('span');
+    overlay.className = 'thumbnail-region-box';
+    if (name) {
+      const label = document.createElement('span');
+      label.textContent = name;
+      overlay.append(label);
+    }
+    paintBox(overlay, box);
+    return overlay;
+  }
+
+  function setDraft(box) {
+    regionEditor.box = box;
+    draftOverlay.hidden = false;
+    paintBox(draftOverlay, box);
+  }
+
+  async function openRegion(reference, item) {
+    const editor = regionEditor = {reference, item, box: item?.box};
+    regionName.value = item?.name || '';
+    regionSave.disabled = regionName.disabled = regionStage.hidden = true;
+    regionDelete.hidden = !item;
+    draftOverlay.hidden = true;
+    $('thumbnail-region-title').textContent = `${item ? 'Edit box' : 'Add a box'} · ${reference.name}`;
+    regionStatus.textContent = 'Loading reference…';
+    regionDialog.showModal();
+    try {
+      const file = await referenceFile(reference);
+      if (regionEditor !== editor || !regionDialog.open) return;
+      regionImage.src = editor.url = URL.createObjectURL(file);
+      await regionImage.decode();
+      if (regionEditor !== editor || !regionDialog.open) return;
+      $('thumbnail-region-existing').replaceChildren(...reference.regions.filter(other => other !== item)
+        .map(other => regionOverlay(other.box, other.name)));
+      if (editor.box) setDraft(editor.box);
+      regionSave.disabled = regionName.disabled = regionStage.hidden = false;
+      regionStatus.textContent = '';
+      regionStage.focus();
+    } catch (error) {
+      if (regionEditor === editor && regionDialog.open) regionStatus.textContent = `Could not open this reference. ${error.message}`;
+    }
+  }
+
+  function boxPoint(event) {
+    const bounds = regionImage.getBoundingClientRect();
+    return {x: clamp((event.clientX - bounds.left) / bounds.width, 0, 1),
+      y: clamp((event.clientY - bounds.top) / bounds.height, 0, 1)};
+  }
+
+  function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+  regionStage.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || !regionEditor || regionEditor.drag) return;
+    regionStage.setPointerCapture(event.pointerId);
+    regionEditor.drag = {id: event.pointerId, start: boxPoint(event), previous: regionEditor.box};
+  });
+  function moveBox(event) {
+    const drag = regionEditor?.drag;
+    if (drag?.id !== event.pointerId) return;
+    const {x, y} = boxPoint(event);
+    const start = drag.start;
+    setDraft({x: Math.min(x, start.x), y: Math.min(y, start.y), width: Math.abs(x - start.x), height: Math.abs(y - start.y)});
+  }
+  regionStage.addEventListener('pointermove', moveBox);
+  regionStage.addEventListener('pointerup', event => {
+    if (regionEditor?.drag?.id !== event.pointerId) return;
+    moveBox(event);
+    const {width, height} = regionEditor.box;
+    if (width < .005 || height < .005) restoreBox();
+    else regionEditor.drag = null;
+  });
+  regionStage.addEventListener('pointercancel', restoreBox);
+  function restoreBox() {
+    if (!regionEditor?.drag) return;
+    regionEditor.box = regionEditor.drag.previous;
+    regionEditor.drag = null;
+    if (regionEditor.box) setDraft(regionEditor.box);
+    else draftOverlay.hidden = true;
+  }
+
+  regionStage.addEventListener('keydown', event => {
+    const step = .01;
+    const dx = event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0;
+    const dy = event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0;
+    if (!dx && !dy) return;
+    event.preventDefault();
+    const {x, y, width, height} = regionEditor.box || {x: .3, y: .3, width: .4, height: .4};
+    setDraft(event.shiftKey
+      ? {x, y, width: clamp(width + dx, .005, 1 - x), height: clamp(height + dy, .005, 1 - y)}
+      : {x: clamp(x + dx, 0, 1 - width), y: clamp(y + dy, 0, 1 - height), width, height});
+  });
+
+  $('thumbnail-region-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const {reference, item, box} = regionEditor;
+    const name = regionName.value.trim();
+    if (!box) { regionStatus.textContent = 'Draw a box around the part of the image you want to name.'; regionStage.focus(); return; }
+    if (!name || /[\[\]@\r\n]/u.test(name)) {
+      regionStatus.textContent = 'Enter a name without brackets or @.';
+      regionName.focus();
+      return;
+    }
+    if ([...references.values()].some(ref => ref.regions.some(region => region !== item && region.name.toLowerCase() === name.toLowerCase()))) {
+      regionStatus.textContent = 'That box name is already in use.';
+      regionName.focus();
+      return;
+    }
+    const saved = {name, box};
+    if (item) {
+      reference.regions = reference.regions.map(region => region === item ? saved : region);
+      conceptInput.value = conceptInput.value.replace(/@\[([^\]\n]+)\]/gu, (token, label) =>
+        label.toLowerCase() === item.name.toLowerCase() ? mentionText(saved) : token);
+    } else reference.regions.push(saved);
+    update();
+    closeRegion();
+  });
+  regionDelete.addEventListener('click', () => {
+    const {reference, item} = regionEditor;
+    reference.regions = reference.regions.filter(region => region !== item);
+    update();
+    closeRegion();
+  });
+  function closeRegion() {
+    const {reference, url} = regionEditor;
+    if (url) URL.revokeObjectURL(url);
+    regionImage.removeAttribute('src');
+    regionEditor = null;
+    regionDialog.close();
+    $(`thumbnail-add-box-${reference.number}`)?.focus();
+  }
+  $('thumbnail-region-close').addEventListener('click', closeRegion);
+  regionDialog.addEventListener('cancel', event => {
+    event.preventDefault();
+    closeRegion();
+  });
 
   function update() {
     const count = `${references.size} of 5 references selected`;
@@ -143,6 +366,7 @@
         if (reference.previewUrl) URL.revokeObjectURL(reference.previewUrl);
         references.delete(id);
         $('thumbnail-status').textContent = '';
+        $('thumbnail-gallery-status').textContent = '';
         update();
       });
       const heading = document.createElement('div');
@@ -167,14 +391,28 @@
         choice.append(input, text);
         tagsGroup.append(choice);
       }
-      row.append(heading, tagsGroup);
+      const regions = document.createElement('div');
+      regions.className = 'thumbnail-region-list';
+      const addBox = regionButton('Add box', () => openRegion(reference));
+      addBox.id = `thumbnail-add-box-${reference.number}`;
+      addBox.setAttribute('aria-label', `Add a box to ${name}`);
+      regions.append(addBox);
+      for (const item of reference.regions) {
+        const pair = document.createElement('span');
+        const edit = regionButton('Edit', () => openRegion(reference, item));
+        edit.setAttribute('aria-label', `Edit box ${item.name}`);
+        pair.append(regionButton(mentionText(item), () => insertMention(item)), edit);
+        regions.append(pair);
+      }
+      row.append(heading, tagsGroup, regions);
       $('thumbnail-references').append(row);
     }
-    updateMentionPreview();
+    updateDescription();
   }
 
   function toggleReference(id, reference) {
     const status = $('thumbnail-status');
+    $('thumbnail-gallery-status').textContent = '';
     if (references.has(id)) references.delete(id);
     else if (references.size < 5) addReference(id, reference);
     else {
@@ -191,7 +429,7 @@
     const collection = collections.find(item => item.id === picker.value);
     $('thumbnail-collection-help').textContent = collection?.images.length
       ? 'Click a thumbnail to select or deselect it.'
-      : 'Save images using the heart or + in the gallery to choose them here.';
+      : 'Save images to a collection with the heart in Explorer.';
     for (const id of collection?.images || []) {
       const tile = document.createElement('button');
       const image = document.createElement('img');
@@ -208,10 +446,8 @@
     update();
   }
 
-  async function openGenerator() {
-    const dialog = $('thumbnail-dialog');
+  async function refreshCollections() {
     const help = $('thumbnail-collection-help');
-    dialog.showModal();
     picker.disabled = true;
     help.textContent = 'Loading collection previews…';
     try {
@@ -220,7 +456,7 @@
       help.textContent = 'Collection previews could not load. Reload the page or upload your own references.';
       return;
     }
-    if (!dialog.open) return;
+    if (panel.inert) return;
     collections = host.saved?.referenceCollections() || [];
     const previous = picker.value;
     picker.replaceChildren(...collections.map(collection =>
@@ -230,6 +466,44 @@
     picker.disabled = !collections.length;
     showCollection();
   }
+
+  function openGenerator(focus = false) {
+    const wasClosed = panel.inert;
+    panel.inert = false;
+    opener.setAttribute('aria-expanded', 'true');
+    if (focus) $('thumbnail-title').focus();
+    if (wasClosed) return refreshCollections();
+  }
+
+  function setFullscreen(expanded) {
+    panel.toggleAttribute('data-fullscreen', expanded);
+    fullscreen.setAttribute('aria-pressed', String(expanded));
+    fullscreen.textContent = expanded ? 'Exit full screen' : 'Full screen';
+    for (const element of document.querySelectorAll('body > main, body > .sidebar')) element.inert = expanded;
+  }
+
+  function closeGenerator() {
+    setFullscreen(false);
+    panel.inert = true;
+    opener.setAttribute('aria-expanded', 'false');
+    opener.focus();
+  }
+
+  window.galleryGenerator = {
+    addReference({id, url}, focus = false) {
+      openGenerator(focus);
+      const status = $('thumbnail-gallery-status');
+      if (references.has(id)) {
+        status.textContent = `${references.get(id).name} is already a reference.`;
+      } else if (references.size >= 5) {
+        status.textContent = 'Remove a reference before adding another. The limit is five.';
+      } else {
+        addReference(id, {url, tags: new Set(['Visual style', 'Composition'])});
+        update();
+        status.textContent = `Added ${references.get(id).name} as a reference.`;
+      }
+    }
+  };
 
   picker.addEventListener('change', showCollection);
   $('thumbnail-game-url').addEventListener('keydown', event => {
@@ -272,9 +546,9 @@
       status.textContent = error instanceof TypeError || error instanceof SyntaxError ? 'Could not load Roblox thumbnails. Try again later.' : error.message;
     } finally { button.disabled = false; }
   });
-  window.addEventListener('gallery:connected', () => {
-    if ($('thumbnail-dialog').open) showCollection();
-  });
+  for (const event of ['gallery:connected', 'gallery:saved', 'gallery:saved-view']) {
+    window.addEventListener(event, () => { if (!panel.inert) refreshCollections(); });
+  }
   $('thumbnail-upload').addEventListener('change', event => {
     const files = [...event.target.files];
     const status = $('thumbnail-status');
@@ -289,9 +563,16 @@
     }
     event.target.value = '';
   });
-  $('thumbnail-open').addEventListener('click', openGenerator);
-  $('thumbnail-close').addEventListener('click', () => $('thumbnail-dialog').close());
-  window.addEventListener('DOMContentLoaded', openGenerator);
+  opener.addEventListener('click', () => { if (panel.inert) openGenerator(true); else closeGenerator(); });
+  $('thumbnail-close').addEventListener('click', closeGenerator);
+  fullscreen.addEventListener('click', () => setFullscreen(!panel.hasAttribute('data-fullscreen')));
+  panel.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    event.preventDefault();
+    if (panel.hasAttribute('data-fullscreen')) setFullscreen(false);
+    else closeGenerator();
+  });
+  if (opener.hasAttribute('data-open-on-load')) window.addEventListener('DOMContentLoaded', () => openGenerator());
   function asDataUrl(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -315,15 +596,55 @@
       }, 'image/png'));
     } finally { bitmap.close(); }
   }
-  async function generationParts(concept, textEnabled, wording) {
-    const selected = [...references.values()].map(reference => ({...reference, tags: new Set(reference.tags)}));
-    for (const mention of referenceMentions(concept)) {
-      if (!selected.some(reference => reference.number === Number(mention[1]))) {
-        throw new Error(`Remove or replace ${mention[0]} in the description. That image is no longer selected.`);
-      }
+
+  async function referenceFile(reference) {
+    let file = reference.file;
+    if (reference.url) {
+      const response = await fetch(reference.url, {cache: 'no-store'});
+      if (!response.ok) throw new Error('Could not download a Roblox reference. Reload the game thumbnails and try again.');
+      const downloaded = await response.blob();
+      file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
     }
-    if (selected.some(reference => !reference.tags.size)) {
-      throw new Error('Choose at least one tag for each reference image.');
+    if (!file) file = await host.imageFile(reference.id);
+    if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
+    return file;
+  }
+
+  async function imagePart(file) {
+    const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(await asDataUrl(file));
+    if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
+    return {inlineData: {mimeType: match[1], data: match[2]}};
+  }
+
+  async function cropPart(bitmap, {x, y, width, height}) {
+    const left = Math.floor(x * bitmap.width), top = Math.floor(y * bitmap.height);
+    const cropWidth = Math.min(bitmap.width, Math.ceil((x + width) * bitmap.width)) - left;
+    const cropHeight = Math.min(bitmap.height, Math.ceil((y + height) * bitmap.height)) - top;
+    const scale = Math.min(1, 1024 / Math.max(cropWidth, cropHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(cropWidth * scale));
+    canvas.height = Math.max(1, Math.round(cropHeight * scale));
+    canvas.getContext('2d').drawImage(bitmap, left, top, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+    const crop = await new Promise((resolve, reject) => canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Could not prepare a named box. Try drawing it again.'));
+    }, 'image/webp', .92));
+    return imagePart(crop);
+  }
+
+  async function generationParts(concept, textEnabled, wording) {
+    const selected = [...references.values()].map(reference => ({...reference, tags: new Set(reference.tags), regions: [...reference.regions]}));
+    const mentionedBoxes = new Set();
+    let description = '', from = 0;
+    for (const mention of referenceMentions(concept)) {
+      const found = findMention(mention, selected);
+      if (!found) throw new Error(`Remove or replace ${mention[0]} in the description. That ${mention[2] ? 'box is no longer available' : 'image is no longer selected'}.`);
+      if (found.item.box) mentionedBoxes.add(found.item);
+      description += concept.slice(from, mention.index) + mentionText(found.item);
+      from = mention.index + mention[0].length;
+    }
+    if (selected.some(reference => !reference.tags.size && !reference.regions.some(region => mentionedBoxes.has(region)))) {
+      throw new Error('Choose at least one tag or mention a named box for each reference image.');
     }
     const promptResponse = await fetch('./thumbnail-prompt.txt');
     if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
@@ -332,10 +653,13 @@
       ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
         : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
       : 'Do not add titles, captions, signage, watermarks, or other text. Preserve any lettering that is part of a Logo-tagged reference within the logo itself. Do not repeat that lettering elsewhere.';
-    const scene = concept || (selected.length
+    const scene = description + concept.slice(from) || (selected.length
       ? 'Create a coherent Roblox thumbnail using the attached images according to their reference tags. Fill in unspecified scene details to fit those references.'
       : 'Create an original Roblox game thumbnail with a clear subject, action, and setting.');
     const parts = [{text: `${prompt}\n\nUSER REQUEST:\n${scene}\n\nTEXT SETTINGS:\n${textInstruction}`}];
+    if (mentionedBoxes.size) {
+      parts.push({text: 'Each @[name] in the description refers to a separately attached crop from a reference image. Follow the requested action, pose, or position for that specific subject. When several crops come from one image, treat their contents as separate references and keep their identities and assigned roles distinct. These explicit assignments take priority over default whole-image tags. Do not render the mention names as text.'});
+    }
     // Keep selection order within each group so the first reference for each tag remains primary.
     const ordered = [
       ...selected.filter(reference => reference.tags.has('Character')),
@@ -346,23 +670,23 @@
       parts.push({text: `By default, use @${ordered[0].name} as the subject to restage. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position. Follow any explicit character assignments in the description.`});
     }
     for (const reference of ordered) {
-      let file = reference.file;
-      if (reference.url) {
-        const response = await fetch(reference.url, {cache: 'no-store'});
-        if (!response.ok) throw new Error('Could not download a Roblox reference. Reload the game thumbnails and try again.');
-        const downloaded = await response.blob();
-        file = new Blob([downloaded], {type: downloaded.type.toLowerCase()});
-      }
-      if (!file) file = await host.imageFile(reference.id);
-      if (file.size > 10 * 1024 * 1024) throw new Error('A reference exceeds 10 MB. Choose a smaller image.');
-      const dataUrl = await asDataUrl(file);
-      const match = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.*)$/s.exec(dataUrl);
-      if (!match) throw new Error('A reference must be a PNG, JPEG, WEBP, or GIF image.');
+      const file = await referenceFile(reference);
       const instructions = Object.keys(tagDescriptions)
         .filter(tag => reference.tags.has(tag))
         .map(tag => `${tag}: ${tagDescriptions[tag]}`);
-      parts.push({text: `@${reference.name} refers to the single image attached immediately after this note. Default uses: ${instructions.join('; ')}. Use this image as directed by any explicit mention in the description. Follow the text settings above.`});
-      parts.push({inlineData: {mimeType: match[1], data: match[2]}});
+      const uses = instructions.length ? `Default uses: ${instructions.join('; ')}.` : 'Use the full image as context for its named crops.';
+      parts.push({text: `@${reference.name} refers to the single image attached immediately after this note. ${uses} Use this image as directed by any explicit mention in the description. Follow the text settings above.`});
+      parts.push(await imagePart(file));
+      const crops = reference.regions.filter(region => mentionedBoxes.has(region));
+      if (crops.length) {
+        const bitmap = await createImageBitmap(file);
+        try {
+          for (const region of crops) {
+            parts.push({text: `${mentionText(region)} refers to the crop from @${reference.name} attached immediately after this note. Use the subject shown in this crop for the role specified by this mention.`});
+            parts.push(await cropPart(bitmap, region.box));
+          }
+        } finally { bitmap.close(); }
+      }
     }
     if (!hasCharacter) {
       parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});

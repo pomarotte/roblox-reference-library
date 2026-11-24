@@ -4,12 +4,18 @@ const vm = require('node:vm');
 const elements = new Map(), events = {};
 function element(id) {
   if (!elements.has(id)) elements.set(id, {
-    id, value: '', hidden: false, children: [], handlers: {}, dataset: {}, attributes: {}, selectionStart: 0, selectionEnd: 0,
+    id, value: '', hidden: false, children: [], handlers: {}, dataset: {}, attributes: {}, style: {}, selectionStart: 0, selectionEnd: 0,
     addEventListener(type, fn) {this.handlers[type] = fn;},
     replaceChildren(...nodes) {this.children = nodes;},
     append(...nodes) {this.children.push(...nodes);},
     setAttribute(name, value) {this.attributes[name] = value;},
-    showModal() {this.open = true;}, close() {this.open = false;}, focus() {document.activeElement = this;},
+    hasAttribute(name) {return Object.hasOwn(this.attributes, name);},
+    removeAttribute(name) {delete this.attributes[name];},
+    toggleAttribute(name, force) {if (force) this.attributes[name] = ''; else delete this.attributes[name];},
+    showModal() {this.open = true;}, close() {this.open = false;},
+    async decode() {}, setPointerCapture() {},
+    getBoundingClientRect() {return {left: 10, top: 20, width: 100, height: 100};},
+    focus() {document.activeElement = this;},
     setRangeText(text, start, end) {this.value = this.value.slice(0, start) + text + this.value.slice(end);},
     setSelectionRange(start, end) {this.selectionStart = start; this.selectionEnd = end;}
   });
@@ -24,7 +30,8 @@ class Reader {
   }
 }
 const exportsMade = [];
-const document = {getElementById: element, createElement: tag => {
+const explorer = element('explorer');
+const document = {getElementById: element, querySelectorAll: () => [explorer], createElement: tag => {
   if (tag !== 'canvas') return element(Symbol());
   const canvas = {
     getContext: () => ({drawImage: (image, ...rectangle) => { canvas.rectangle = rectangle; }}),
@@ -57,7 +64,7 @@ const window = {
     ready,
     saved: {
       referenceCollections: () => [
-        {id: 'favorites', name: 'Favorites', images: [12]},
+        {id: 'collection:racing', name: 'Racing', images: [12]},
         {id: 'collection:horror', name: 'Horror', images: [12, 13]}
       ],
       referenceName: id => `Saved image ${id}`
@@ -77,7 +84,7 @@ const gameImage = 'https://tr.rbxcdn.com/test/768/432/Image/Webp/noFilter';
 const lookupRequests = [];
 let failGeneration = false;
 let exportedUrl = 0;
-const context = {document, window, Worker, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
+const context = {document, window, Worker, IntersectionObserver, ResizeObserver: class {observe() {}}, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
   static createObjectURL(value) { return value instanceof Blob ? `blob:result-${++exportedUrl}` : 'blob:result'; }
   static revokeObjectURL() {}
 }, createImageBitmap: async () => ({width: 1920, height: 1088, close() {}}), fetch: async (url, options) => {
@@ -97,10 +104,13 @@ const context = {document, window, Worker, IntersectionObserver, Option, FileRea
 element('thumbnail-edit-fields').hidden = true;
 element('thumbnail-upscale').hidden = true;
 element('thumbnail-upscaled-download').hidden = true;
+element('thumbnail-panel').inert = true;
+element('thumbnail-open').setAttribute('data-open-on-load', '');
 vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), context);
 (async () => {
   const opening = events.DOMContentLoaded();
-  assert.equal(element('thumbnail-dialog').open, true);
+  const panel = element('thumbnail-panel');
+  assert.equal(panel.inert, false);
   assert.equal(element('thumbnail-collection').disabled, true);
   assert.deepEqual(previewRequests, []);
   finishCatalogue();
@@ -118,9 +128,24 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(storage.get('rolibrary-gemini-api-key'), 'key');
   const picker = element('thumbnail-collection');
   assert.equal(picker.children.length, 2);
-  assert.equal(picker.value, 'favorites');
+  assert.equal(picker.value, 'collection:racing');
   const grid = element('thumbnail-collection-images');
-  grid.children[0].handlers.click();
+  window.galleryGenerator.addReference({id: 12});
+  window.galleryGenerator.addReference({id: 12});
+  assert.equal(element('thumbnail-count').textContent, '(1)');
+  assert.match(element('thumbnail-gallery-status').textContent, /already a reference/);
+  element('thumbnail-fullscreen').handlers.click();
+  assert.equal(panel.hasAttribute('data-fullscreen'), true);
+  assert.equal(explorer.inert, true);
+  panel.handlers.keydown({key: 'Escape', preventDefault() {}});
+  assert.equal(explorer.inert, false);
+  assert.equal(panel.inert, false);
+  element('thumbnail-close').handlers.click();
+  assert.equal(panel.inert, true);
+  window.galleryGenerator.addReference({id: 12}, true);
+  assert.equal(panel.inert, false);
+  assert.equal(element('thumbnail-count').textContent, '(1)');
+  assert.equal(document.activeElement, element('thumbnail-title'));
   assert.equal(grid.children[0].attributes['aria-pressed'], 'true');
   picker.value = 'collection:horror';
   picker.handlers.change();
@@ -140,22 +165,24 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(uploadMention.children[0].src, 'blob:result');
   assert.equal(uploadMention.children[1], 'Image 3');
   const concept = element('thumbnail-concept');
+  const highlight = element('thumbnail-concept-highlight');
   const mentionPreview = element('thumbnail-mention-preview');
   concept.value = 'Set the scene in PLACE at night';
   concept.setSelectionRange(17, 22);
   savedMention.handlers.click();
   assert.equal(document.activeElement, concept);
   assert.equal(concept.value, 'Set the scene in @Image 2 at night');
-  assert.equal(mentionPreview.hidden, false);
-  assert.equal(mentionPreview.children[0].src, 'fixture-12.webp');
+  assert.equal(mentionPreview.hidden, true);
+  assert.equal(highlight.children[1].textContent, '@Image 2');
   concept.setSelectionRange(concept.value.length, concept.value.length);
   uploadMention.handlers.click();
   assert.ok(concept.value.endsWith('@Image 3 '));
   assert.equal(concept.selectionStart, concept.value.length);
-  assert.equal(mentionPreview.children[1], 'Image 3');
+  assert.equal(mentionPreview.hidden, true);
   concept.setSelectionRange(17, 25);
   concept.handlers.select();
   assert.equal(mentionPreview.children[1], 'Image 2');
+  assert.equal(mentionPreview.children[0].src, 'fixture-12.webp');
   concept.setSelectionRange(concept.value.length - 9, concept.value.length - 1);
   concept.handlers.selectionchange();
   assert.equal(mentionPreview.children[1], 'Image 3');
@@ -171,7 +198,12 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   const character = uploadTags[4].children[0];
   character.checked = false;
   character.handlers.change();
-  concept.value = 'Use @Image 3 as the dragon and @Image 2 for the setting.';
+  concept.value = 'Use @image 3 as the dragon and @image2 for the setting.';
+  concept.setSelectionRange(4, 12);
+  concept.handlers.input();
+  assert.equal(highlight.children[1].textContent, '@image 3');
+  assert.equal(highlight.children[3].textContent, '@image2');
+  assert.equal(mentionPreview.children[1], 'Image 3');
   element('thumbnail-aspect').value = '16:9';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 0);
@@ -210,7 +242,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   selectedRows[1].children[0].children[1].handlers.click();
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
-  assert.match(element('thumbnail-status').textContent, /Remove or replace @Image 3/);
+  assert.match(element('thumbnail-status').textContent, /Remove or replace @image 3/);
   concept.value = '  ';
   element('thumbnail-resolution').value = '1K';
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
@@ -308,5 +340,61 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.match(calls.at(-1).contents[0].parts[0].text, /Create an original Roblox game thumbnail/);
   assert.deepEqual([...storage], [['rolibrary-gemini-api-key', 'key']]);
-  console.log('Temporary references, logo lettering, exact PNG export, iterative edits, and AI upscale controls passed.');
+
+  window.galleryGenerator.addReference({id: 12});
+  const regionInput = element('thumbnail-region-name');
+  const regionForm = element('thumbnail-region-form');
+  const stage = element('thumbnail-region-stage');
+  const regions = () => element('thumbnail-references').children[0].children[2].children;
+  async function addBox(name, start, end) {
+    await regions()[0].handlers.click();
+    stage.handlers.pointerdown({button: 0, pointerId: 1, clientX: start, clientY: 30});
+    stage.handlers.pointerup({pointerId: 1, clientX: end, clientY: 80});
+    regionInput.value = name;
+    regionForm.handlers.submit({preventDefault() {}});
+  }
+  await addBox('Red Knight', 20, 50);
+  await addBox('Blue Wizard', 70, 100);
+  await addBox('Unused Prop', 50, 60);
+  assert.equal(regions().length, 4);
+  concept.focus();
+  concept.value = '@Red';
+  concept.setSelectionRange(4, 4);
+  concept.handlers.input();
+  const choices = element('thumbnail-mention-suggestions');
+  assert.deepEqual(choices.children.map(button => button.textContent), ['@[Red Knight]']);
+  choices.children[0].handlers.click();
+  assert.equal(concept.value, '@[Red Knight] ');
+  assert.equal(mentionPreview.hidden, true);
+  concept.setSelectionRange(0, '@[Red Knight]'.length);
+  concept.handlers.select();
+  assert.equal(mentionPreview.children[1], 'Red Knight');
+  concept.value += 'rides while @[Blue Wizard] casts a spell.';
+  await regions()[1].children[1].handlers.click();
+  regionInput.value = 'Crimson Knight';
+  regionForm.handlers.submit({preventDefault() {}});
+  assert.match(concept.value, /^@\[Crimson Knight\] rides while @\[Blue Wizard\]/);
+  const exportsBeforeCrops = exportsMade.length;
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  const cropParts = calls.at(-1).contents[0].parts;
+  for (const name of ['Crimson Knight', 'Blue Wizard']) {
+    const partIndex = cropParts.findIndex(part => part.text?.startsWith(`@[${name}] refers to the crop`));
+    assert.ok(partIndex > 0);
+    assert.equal(cropParts[partIndex + 1].inlineData.mimeType, 'image/webp');
+  }
+  assert.equal(cropParts.some(part => part.text?.includes('Unused Prop')), false);
+  const crops = exportsMade.slice(exportsBeforeCrops, exportsBeforeCrops + 2);
+  assert.deepEqual(crops.map(crop => crop.rectangle.slice(0, 2)), [[192, 108], [1152, 108]]);
+  assert.ok(crops.every(crop => crop.width > 0 && crop.width < 1920 && crop.height > 0 && crop.height < 1088));
+  await regions()[2].children[1].handlers.click();
+  element('thumbnail-region-delete').handlers.click();
+  const callsBeforeDeletedBox = calls.length;
+  await element('thumbnail-form').handlers.submit({preventDefault() {}});
+  assert.equal(calls.length, callsBeforeDeletedBox);
+  assert.match(element('thumbnail-status').textContent, /Remove or replace @\[Blue Wizard\]/);
+  for (const row of element('thumbnail-references').children) row.children[0].children[1].handlers.click();
+  for (let id = 20; id < 26; id++) window.galleryGenerator.addReference({id});
+  assert.equal(element('thumbnail-count').textContent, '(5)');
+  assert.match(element('thumbnail-gallery-status').textContent, /limit is five/);
+  console.log('Generator drawer, full screen, named box mentions and crops, reference limits, PNG export, edits, and AI upscale passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

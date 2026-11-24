@@ -40,7 +40,6 @@ window.galleryCollections = (() => {
     return {
       get data() { return structuredClone(data); },
       refresh: read,
-      favorite(id) { edit(value => { value.favorites = toggle(value.favorites, id, !value.favorites.includes(id)); }); },
       create(label, image = null) {
         const id = crypto.randomUUID();
         edit(value => {
@@ -122,7 +121,7 @@ window.galleryCollections = (() => {
     try { store = createStore(localStorage); }
     catch (error) { report(error); return null; }
     const data = () => store.data;
-    const active = () => view === 'favorites' ? {name: 'Favorites', images: data().favorites} : data().collections.find(c => c.id === view);
+    const active = () => data().collections.find(c => c.id === view);
     function changed() {
       const previous = view;
       refresh();
@@ -131,19 +130,6 @@ window.galleryCollections = (() => {
     function attempt(action) {
       try { action(); el('saved-error').hidden = el('collection-picker-error').hidden = true; changed(); return true; }
       catch (error) { report(error); return false; }
-    }
-    function favoriteButton(id, currentImage) {
-      const button = document.createElement('button');
-      button.type = 'button'; button.className = 'save-favorite'; button.dataset.favoriteId = id;
-      button.addEventListener('click', () => attempt(() => store.favorite(currentImage ? currentImage() : Number(button.dataset.favoriteId))));
-      updateFavorite(button, id);
-      return button;
-    }
-    function updateFavorite(button, id) {
-      const selected = data().favorites.includes(id);
-      button.textContent = selected ? '♥' : '♡';
-      button.setAttribute('aria-label', selected ? 'Remove image from favorites' : 'Favorite image');
-      button.setAttribute('aria-pressed', String(selected));
     }
     function refreshPicker() {
       const collections = data().collections, list = el('collection-list');
@@ -165,12 +151,10 @@ window.galleryCollections = (() => {
     }
     function refresh() {
       if (view && !active()) view = '';
-      el('saved-view').replaceChildren(new Option('Explore all', ''), new Option(`Favorites (${data().favorites.length})`, 'favorites'), ...data().collections.map(c => new Option(`${c.name} (${c.images.length})`, c.id)));
+      el('saved-view').replaceChildren(new Option('Explore all', ''), ...data().collections.map(c => new Option(`${c.name} (${c.images.length})`, c.id)));
       el('saved-view').value = view;
       el('saved-actions').hidden = !view;
-      el('rename-collection').hidden = el('delete-collection').hidden = view === 'favorites';
       el('download-collection').disabled = !active()?.images.length || !!exportController;
-      for (const button of document.querySelectorAll('[data-favorite-id]')) updateFavorite(button, Number(button.dataset.favoriteId));
       refreshPicker();
     }
     function openPicker(image = null, rename = null) {
@@ -277,11 +261,9 @@ window.galleryCollections = (() => {
       } finally { exportController = null; el('cancel-zip').hidden = true; refresh(); }
     });
     el('cancel-zip').addEventListener('click', () => exportController?.abort());
-    const viewerFavorite = favoriteButton(1);
-    el('viewer-saved-actions').append(viewerFavorite);
     const viewerCollect = document.createElement('button');
-    viewerCollect.type = 'button'; viewerCollect.className = 'secondary'; viewerCollect.textContent = 'Add to collection';
-    viewerCollect.addEventListener('click', () => addToCollection(Number(viewerFavorite.dataset.favoriteId)));
+    viewerCollect.type = 'button'; viewerCollect.className = 'secondary'; viewerCollect.textContent = '♡ Add to collection';
+    viewerCollect.addEventListener('click', () => addToCollection(Number(viewerCollect.dataset.imageId)));
     el('viewer-saved-actions').append(viewerCollect);
     el('saved-navigation').hidden = el('viewer-saved-actions').hidden = false;
     refresh();
@@ -290,24 +272,20 @@ window.galleryCollections = (() => {
       get ids() { return active()?.images || []; },
       get title() { return active()?.name; },
       referenceCollections() {
-        const {favorites, collections} = data();
-        return [{id: 'favorites', name: 'Favorites', images: favorites},
-          ...collections.map(collection => ({...collection, id: 'collection:' + collection.id}))];
+        return data().collections.map(collection => ({...collection, id: 'collection:' + collection.id}));
       },
       referenceName(id) { return getImage(id)?.filename || `Saved image ${id}`; },
       reset() { view = ''; refresh(); },
       select(id) { view = id; refresh(); },
-      showImage(id) { viewerFavorite.dataset.favoriteId = id; updateFavorite(viewerFavorite, id); },
-      card(button, game, currentImage) {
-        const wrapper = document.createElement('article'); wrapper.className = 'card-shell';
-        const actions = document.createElement('div'); actions.className = 'card-save-actions';
-        const favorite = favoriteButton(game.image_id, currentImage), collect = document.createElement('button');
+      showImage(id) { viewerCollect.dataset.imageId = id; },
+      addCardActions(actions, game, currentImage) {
+        const collect = document.createElement('button');
         collect.type = 'button'; collect.className = 'add-to-collection'; collect.setAttribute('aria-label', 'Add image to collection');
+        collect.textContent = '♡';
+        collect.title = 'Add to collection';
         collect.addEventListener('click', () => addToCollection(currentImage()));
-        favorite.addEventListener('pointerenter', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
-        favorite.addEventListener('focus', () => { favorite.dataset.favoriteId = currentImage(); updateFavorite(favorite, currentImage()); });
-        actions.append(favorite, collect);
-        if (view && view !== 'favorites' && active()?.images.includes(game.image_id)) {
+        actions.append(collect);
+        if (active()?.images.includes(game.image_id)) {
           const collectionId = view, remove = document.createElement('button');
           remove.type = 'button';
           remove.className = 'remove-from-collection';
@@ -317,7 +295,6 @@ window.galleryCollections = (() => {
           remove.addEventListener('click', () => attempt(() => store.include(collectionId, game.image_id, false)));
           actions.append(remove);
         }
-        wrapper.append(button, actions); return wrapper;
       }
     };
   }

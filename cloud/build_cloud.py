@@ -52,9 +52,7 @@ def build_cloud(output, extend=None, cache=GALLERY):
         (output / 'daily.css').write_text('.daily-view { margin-right: auto; } .toolbar .daily-view ~ .check-control { margin-right: 0; } .daily-view select { width: auto; max-width: 75vw; }', encoding='utf-8')
         html = html.replace('</head>', '<link rel="stylesheet" href="./daily.css">\n</head>')
     html_path.write_text(html, encoding='utf-8')
-    generator_html = (output / 'gen' / 'index.html').read_text(encoding='utf-8')
-    generator = re.search(r'thumbnail-generator\.[a-f0-9]+\.js', generator_html).group()
-    build_generator(output, html, generator)
+    build_generator(output, html)
 
 
 if __name__ == '__main__':

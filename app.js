@@ -10,6 +10,8 @@ let viewBeforeSimilarity;
 let hoverGeneration = 0;
 const imageLists = new Map();
 const saved = window.galleryHost?.saved;
+const generator = window.galleryGenerator;
+const viewerReference = $('viewer-add-reference');
 
 async function api(path, options = {}) {
   if (window.galleryHost) return window.galleryHost.api(path, options);
@@ -208,13 +210,33 @@ function card(game, chart = false) {
   button.append(imageBox, node('h3', '', chart ? `${game.chart_rank}. ${title}` : title), meta, node('span', 'card-subgenre', game.subgenre || (chart ? 'All subgenres' : game.status === 'unavailable' ? 'Metadata unavailable' : 'Information still being collected')));
   if (game.similarity_score !== undefined) button.append(node('span', 'match-score', `Visual match · ${game.similarity_score.toFixed(2)}`));
   let ownStop = () => {};
-  const root = saved && typeof game.image_id === 'number' ? saved.card(button, game, () => displayedImageId) : button;
-  const actions = chart && root.querySelector('.card-save-actions');
+  const canSave = saved && typeof game.image_id === 'number';
+  const canReference = generator && cardKind === 'thumbs';
+  const actions = canSave || canReference ? node('div', 'card-save-actions') : null;
+  const root = actions ? node('article', 'card-shell') : button;
+  if (actions) {
+    if (canReference) {
+      const add = node('button', 'add-reference', '+');
+      add.type = 'button';
+      add.title = 'Add as reference';
+      add.setAttribute('aria-label', 'Add thumbnail as reference');
+      add.addEventListener('click', event => {
+        const item = chart ? chartImages().find(image => image.id === displayedImageId) : {id: displayedImageId};
+        if (item) generator.addReference(item, event.detail === 0);
+      });
+      actions.append(add);
+    }
+    if (canSave) saved.addCardActions(actions, game, () => displayedImageId);
+    root.append(button, actions);
+  }
   const failed = new Set();
   const chartImages = () => game.images.filter(item => !failed.has(item.id));
   function preview(item) {
     displayedImageId = item?.id;
-    if (actions) actions.hidden = typeof displayedImageId !== 'number';
+    if (actions) {
+      actions.hidden = !item;
+      actions.classList.toggle('remote-image', Boolean(item?.url));
+    }
     if (item) {
       imageBox.prepend(image);
       displayImage(image, item);
@@ -388,6 +410,7 @@ function showImage(index) {
     if (archived) saved.showImage(image.id);
   }
   $('find-similar').hidden = !archived;
+  if (viewerReference) viewerReference.hidden = !generator || image?.kind !== 'thumbs';
   $('open-image').hidden = $('download-image').hidden = $('preview').hidden = !image;
   $('preview-unavailable').hidden = Boolean(image);
   if (image) {
@@ -545,6 +568,13 @@ $('clear-similarity').addEventListener('click', async () => {
 });
 $('close-viewer').addEventListener('click', () => $('viewer').close());
 $('viewer').addEventListener('close', () => lastTrigger?.focus());
+viewerReference?.addEventListener('click', () => {
+  const image = selectedImages[imageIndex];
+  if (!generator || image?.kind !== 'thumbs') return;
+  lastTrigger = null;
+  $('viewer').close();
+  generator.addReference(image, true);
+});
 $('viewer').addEventListener('click', event => { if (event.target === $('viewer')) { const r = $('viewer').getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $('viewer').close(); } });
 $('image-prev').addEventListener('click', () => showImage(imageIndex - 1));
 $('image-next').addEventListener('click', () => showImage(imageIndex + 1));
