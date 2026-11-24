@@ -146,7 +146,11 @@ jobs:
         run: |
           for attempt in {1..12}; do
             count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?name=github-pages-$GITHUB_RUN_ATTEMPT" --jq '.total_count')
-            if [[ "$count" == 1 ]]; then exit 0; fi
+            if [[ "$count" == 1 ]]; then
+              # The deploy action can lag behind the workflow artifact listing.
+              sleep 20
+              exit 0
+            fi
             sleep 5
           done
           echo 'Pages artifact is still unavailable.'
