@@ -30,6 +30,17 @@ const storage = new Map([['rolibrary-gemini-api-key', 'previous-key']]);
 let finishCatalogue;
 const ready = new Promise(resolve => { finishCatalogue = resolve; });
 const previewRequests = [];
+const upscaleInputs = [];
+let failUpscale = true;
+class Worker {
+  constructor(path) { assert.equal(path, './thumbnail-upscaler.js'); }
+  async postMessage(input) {
+    upscaleInputs.push(await input.text());
+    this.onmessage({data: {progress: 0.5}});
+    this.onmessage({data: failUpscale ? {error: 'Test upscale failure'} : {image: new Blob(['upscaled'], {type: 'image/png'})}});
+  }
+  terminate() {}
+}
 const window = {
   localStorage: {getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)},
   addEventListener(type, fn) {events[type] = fn;},
@@ -57,7 +68,7 @@ const gameImage = 'https://tr.rbxcdn.com/test/768/432/Image/Webp/noFilter';
 const lookupRequests = [];
 let failGeneration = false;
 let exportedUrl = 0;
-const context = {document, window, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
+const context = {document, window, Worker, IntersectionObserver, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
   static createObjectURL(value) { return value instanceof Blob ? `blob:result-${++exportedUrl}` : 'blob:result'; }
   static revokeObjectURL() {}
 }, createImageBitmap: async () => ({width: 1920, height: 1088, close() {}}), fetch: async (url, options) => {
@@ -75,6 +86,8 @@ const context = {document, window, IntersectionObserver, Option, FileReader: Rea
   return {ok: true, json: async () => ({candidates: [{content: {parts: [{inlineData: {data: 'YQ==', mimeType: 'image/png'}}]}}]})};
 }};
 element('thumbnail-edit-fields').hidden = true;
+element('thumbnail-upscale').hidden = true;
+element('thumbnail-upscaled-download').hidden = true;
 vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), context);
 (async () => {
   const opening = events.DOMContentLoaded();
@@ -154,6 +167,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.match(background.text, /Do not add titles, captions/);
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready · 1920 × 1080');
+  assert.equal(element('thumbnail-upscale').hidden, true);
   assert.deepEqual(exportsMade[0], {width: 1920, height: 1080, rectangle: [0, -4, 1920, 1088], type: 'image/png'});
   selectedRows[1].children[0].children[1].handlers.click();
   element('thumbnail-resolution').value = '1K';
@@ -163,6 +177,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls[1].contents[0].parts.filter(part => part.inlineData).length, 7);
   assert.match(calls[1].contents[0].parts[3].text, /character reference sheets/);
   assert.deepEqual(exportsMade[1], {width: 960, height: 540, rectangle: [0, -2, 960, 544], type: 'image/png'});
+  assert.equal(element('thumbnail-upscale').hidden, false);
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   element('thumbnail-upload').handlers.change({target: {files: Array(5).fill(file), value: 'selected'}});
   assert.match(element('thumbnail-status').textContent, /up to 5/);
@@ -224,6 +239,27 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   failGeneration = false;
   await submitEdit();
   assert.notEqual(element('thumbnail-download').href, editedDownload);
+
+  const upscale = element('thumbnail-upscale'), upscaled = element('thumbnail-upscaled-download');
+  const original = element('thumbnail-download').href;
+  const requestCount = calls.length;
+  await upscale.handlers.click();
+  assert.equal(upscaled.hidden, true);
+  assert.equal(upscale.disabled, false);
+  assert.match(element('thumbnail-status').textContent, /Could not upscale/);
+  failUpscale = false;
+  await upscale.handlers.click();
+  assert.deepEqual(upscaleInputs, ['output-6', 'output-6']);
+  assert.equal(calls.length, requestCount);
+  assert.equal(element('thumbnail-download').href, original);
+  assert.equal(upscaled.hidden, false);
+  assert.notEqual(upscaled.href, original);
+  assert.equal(upscale.hidden, true);
+  assert.equal(element('thumbnail-status').textContent, 'Upscaled thumbnail ready · 1920 × 1080');
+  editInput.value = 'Try a brighter color';
+  await submitEdit();
+  assert.equal(upscaled.hidden, true);
+  assert.equal(upscale.hidden, false);
   assert.deepEqual([...storage], [['rolibrary-gemini-api-key', 'key']]);
-  console.log('Temporary references, logo lettering, exact PNG export, and iterative edits passed.');
+  console.log('Temporary references, logo lettering, exact PNG export, iterative edits, and AI upscale controls passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

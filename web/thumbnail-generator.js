@@ -333,6 +333,45 @@
   const generate = $('thumbnail-generate'), applyEdit = $('thumbnail-apply-edit');
   const editButton = $('thumbnail-edit'), editFields = $('thumbnail-edit-fields');
   const editInstructions = $('thumbnail-edit-instructions');
+  const upscaleButton = $('thumbnail-upscale'), upscaledDownload = $('thumbnail-upscaled-download');
+  const status = $('thumbnail-status');
+  let upscaleWorker, upscaledUrl;
+
+  function setBusy(busy) {
+    generate.disabled = applyEdit.disabled = upscaleButton.disabled = busy;
+  }
+
+  function upscaleThumbnail(image) {
+    upscaleWorker ||= new Worker('./thumbnail-upscaler.js');
+    return new Promise((resolve, reject) => {
+      upscaleWorker.onerror = () => reject(new Error('The upscaler could not start.'));
+      upscaleWorker.onmessage = ({data}) => {
+        if (data.error) reject(new Error(data.error));
+        else if (data.image) resolve(data.image);
+        else status.textContent = `Upscaling thumbnail… ${Math.floor(data.progress * 100)}%`;
+      };
+      upscaleWorker.postMessage(image);
+    });
+  }
+
+  upscaleButton.addEventListener('click', async () => {
+    if (!result || generate.disabled || upscaleButton.hidden) return;
+    setBusy(true);
+    status.textContent = 'Loading the upscaling model…';
+    try {
+      upscaledUrl = URL.createObjectURL(await upscaleThumbnail(result));
+      upscaledDownload.href = upscaledUrl;
+      upscaledDownload.hidden = false;
+      upscaleButton.hidden = true;
+      upscaledDownload.focus();
+      status.textContent = 'Upscaled thumbnail ready · 1920 × 1080';
+    } catch {
+      upscaleWorker?.terminate();
+      upscaleWorker = undefined;
+      status.textContent = 'Could not upscale this thumbnail. Try again or download the original.';
+    } finally { setBusy(false); }
+  });
+
   editButton.addEventListener('click', () => {
     editFields.hidden = !editFields.hidden;
     editButton.setAttribute('aria-expanded', String(!editFields.hidden));
@@ -342,7 +381,6 @@
     event.preventDefault();
     if (generate.disabled) return;
     const editing = event.submitter === applyEdit;
-    const status = $('thumbnail-status');
     const key = keyInput.value.trim();
     const concept = $('thumbnail-concept').value.trim();
     const changes = editInstructions.value.trim();
@@ -352,7 +390,7 @@
       status.textContent = editing ? 'Enter an API key and describe what to change.' : 'Enter an API key and thumbnail description.';
       return;
     }
-    generate.disabled = applyEdit.disabled = true;
+    setBusy(true);
     status.textContent = editing ? 'Editing thumbnail…' : 'Generating thumbnail…';
     try {
       const parts = editing ? [
@@ -376,6 +414,10 @@
       resultUrl = URL.createObjectURL(result);
       $('thumbnail-result').src = resultUrl; $('thumbnail-result').hidden = false;
       $('thumbnail-download').href = resultUrl; $('thumbnail-download').hidden = false;
+      if (upscaledUrl) URL.revokeObjectURL(upscaledUrl);
+      upscaledUrl = undefined;
+      upscaledDownload.hidden = true;
+      upscaleButton.hidden = imageSize !== '1K';
       editButton.hidden = false;
       editInstructions.value = '';
       if (!editing) {
@@ -384,6 +426,6 @@
       }
       status.textContent = `${editing ? 'Edit ready' : 'Thumbnail ready'} · ${width} × ${height}`;
     } catch (error) { status.textContent = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message; }
-    finally { generate.disabled = applyEdit.disabled = false; }
+    finally { setBusy(false); }
   });
 })();

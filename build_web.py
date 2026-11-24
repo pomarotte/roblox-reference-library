@@ -75,7 +75,7 @@ def build(cache, output, extend=None):
         shutil.copyfile(HERE / filename, output / filename)
     shutil.copytree(HERE / 'web' / 'character-references', output / 'character-references', dirs_exist_ok=True)
     assets = {'catalog.json.gz': catalogue_name}
-    for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'thumbnail-prompt.txt', 'thumbnail-generator.js', 'app.js', 'style.css', 'web.css'):
+    for filename in ('web-core.mjs', 'search-worker.js', 'collections.js', 'web-host.js', 'thumbnail-prompt.txt', 'thumbnail-upscaler.js', 'thumbnail-generator.js', 'app.js', 'style.css', 'web.css'):
         source = HERE / filename if filename in ('app.js', 'style.css') else HERE / 'web' / filename
         content = source.read_text(encoding='utf-8')
         for original, hashed in assets.items():

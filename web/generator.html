@@ -8,6 +8,8 @@
 <p id="thumbnail-game-status" role="status"></p>
 <div id="thumbnail-game-images" class="thumbnail-collection-images" role="group" aria-label="Roblox game thumbnails"></div>
 <label for="thumbnail-upload">Upload your own references</label><input id="thumbnail-upload" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple><small>Uploads are temporary and are not saved. Up to five references total. You can change each image’s tags below.</small><div id="thumbnail-selected-count" role="status"></div><div id="thumbnail-references"></div><p>On Generate, your description and selected references are sent to Google. Built-in Roblox character and face references are also sent when no reference is tagged Character. Your Gemini account may be charged. Use images you have permission to send.</p><button id="thumbnail-generate" class="primary" type="submit">Generate thumbnail</button><img id="thumbnail-result" alt="Generated thumbnail" hidden><a id="thumbnail-download" class="secondary" download="roblox-thumbnail.png" hidden>Download thumbnail ↓</a>
+<button id="thumbnail-upscale" class="secondary" type="button" hidden>AI upscale to 1920 × 1080</button>
+<a id="thumbnail-upscaled-download" class="secondary" download="roblox-thumbnail-1920x1080.png" hidden>Download upscaled PNG ↓</a>
 <button id="thumbnail-edit" class="secondary" type="button" aria-controls="thumbnail-edit-fields" aria-expanded="false" hidden>Edit thumbnail</button>
 <div id="thumbnail-edit-fields" hidden>
   <label for="thumbnail-edit-instructions">What would you like to change?</label>
