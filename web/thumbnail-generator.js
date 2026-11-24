@@ -581,7 +581,47 @@
       reader.readAsDataURL(file);
     });
   }
-  async function exportThumbnail(blob, width, height) {
+  function pixelBrightness(pixels, i) {
+    return (0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2]) / 255;
+  }
+
+  function brightnessStats(image) {
+    const sample = document.createElement('canvas');
+    sample.width = 96;
+    sample.height = 54;
+    const context = sample.getContext('2d');
+    context.drawImage(image, 0, 0, sample.width, sample.height);
+    const {data} = context.getImageData(0, 0, sample.width, sample.height);
+    let brightness = 0, highlights = 0, weight = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3];
+      const value = pixelBrightness(data, i);
+      brightness += value * alpha;
+      highlights += value * value * value * alpha;
+      weight += alpha;
+    }
+    if (weight) return {mean: brightness / weight, highlightWeight: brightness ? highlights / brightness : 0};
+  }
+
+  function limitThumbnailBrightness(canvas, context, target) {
+    const stats = brightnessStats(canvas);
+    // Leave a small margin for differences in subject coverage and framing.
+    if (!stats || stats.mean <= target + 0.04) return;
+    const scale = (target + 0.04) / stats.mean;
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const {data} = image;
+    for (let i = 0; i < data.length; i += 4) {
+      const value = pixelBrightness(data, i);
+      // Give highlights slightly more gain while keeping the same average brightness.
+      const gain = scale * (1 + 0.25 * (1 - scale) * (value * value - stats.highlightWeight));
+      data[i] *= gain;
+      data[i + 1] *= gain;
+      data[i + 2] *= gain;
+    }
+    context.putImageData(image, 0, 0);
+  }
+
+  async function exportThumbnail(blob, width, height, targetBrightness) {
     const bitmap = await createImageBitmap(blob);
     try {
       const canvas = document.createElement('canvas');
@@ -589,7 +629,9 @@
       canvas.height = height;
       const scale = Math.max(width / bitmap.width, height / bitmap.height);
       const drawnWidth = bitmap.width * scale, drawnHeight = bitmap.height * scale;
-      canvas.getContext('2d').drawImage(bitmap, (width - drawnWidth) / 2, (height - drawnHeight) / 2, drawnWidth, drawnHeight);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, (width - drawnWidth) / 2, (height - drawnHeight) / 2, drawnWidth, drawnHeight);
+      if (targetBrightness !== undefined) limitThumbnailBrightness(canvas, context, targetBrightness);
       return await new Promise((resolve, reject) => canvas.toBlob(file => {
         if (file) resolve(file);
         else reject(new Error('Could not prepare the thumbnail for download.'));
@@ -666,6 +708,9 @@
       ...selected.filter(reference => !reference.tags.has('Character'))
     ];
     const hasCharacter = ordered[0]?.tags.has('Character');
+    const lighting = selected.find(reference => reference.tags.has('Lighting'));
+    const colors = selected.find(reference => reference.tags.has('Colors'));
+    let targetBrightness;
     if (hasCharacter) {
       parts.push({text: `By default, use @${ordered[0].name} as the subject to restage. Keep its recognizable geometry, face, silhouette, and distinctive features. When following the framing or pose from another image, put this subject in that pose and position. Follow any explicit character assignments in the description.`});
     }
@@ -678,9 +723,11 @@
       parts.push({text: `@${reference.name} refers to the single image attached immediately after this note. ${uses} Use this image as directed by any explicit mention in the description. Follow the text settings above.`});
       parts.push(await imagePart(file));
       const crops = reference.regions.filter(region => mentionedBoxes.has(region));
-      if (crops.length) {
+      const setsBrightness = reference === (lighting || colors);
+      if (crops.length || setsBrightness) {
         const bitmap = await createImageBitmap(file);
         try {
+          if (setsBrightness) targetBrightness = brightnessStats(bitmap)?.mean;
           for (const region of crops) {
             parts.push({text: `${mentionText(region)} refers to the crop from @${reference.name} attached immediately after this note. Use the subject shown in this crop for the role specified by this mention.`});
             parts.push(await cropPart(bitmap, region.box));
@@ -715,8 +762,6 @@
     if (assigned.length) {
       parts.push({text: `Default reference assignments: ${assigned.join('; ')}. Explicit uses of named images in the description take priority for the specified aspects. Combine the remaining assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images.`});
     }
-    const lighting = selected.find(reference => reference.tags.has('Lighting'));
-    const colors = selected.find(reference => reference.tags.has('Colors'));
     if (lighting || colors) {
       const exposure = lighting
         ? `Use @${lighting.name} (Lighting) for overall exposure, light direction and intensity, shadow depth, and contrast.`
@@ -724,7 +769,7 @@
       const palette = colors && lighting ? ` Use @${colors.name} (Colors) for the overall palette and saturation.` : '';
       parts.push({text: `Final lighting and color direction, unless the description explicitly overrides these aspects: ${exposure}${palette} Apply these assignments across the full frame, including the sky, background, props, and characters. Ignore conflicting lighting or palette cues from images assigned to other roles. If the exposure reference is dark, keep most of the scene dark and use localized highlights to make the subjects readable. Avoid bright daylight or washed-out shadows unless they appear in the exposure reference or the description requests them.`});
     }
-    return parts;
+    return {parts, targetBrightness};
   }
   const generate = $('thumbnail-generate'), applyEdit = $('thumbnail-apply-edit');
   const editButton = $('thumbnail-edit'), editFields = $('thumbnail-edit-fields');
@@ -789,11 +834,11 @@
     setBusy(true);
     status.textContent = editing ? 'Editing thumbnail…' : 'Generating thumbnail…';
     try {
-      const parts = editing ? [
+      const {parts, targetBrightness} = editing ? {parts: [
         {text: 'Edit this Roblox thumbnail according to the request below. Preserve the composition, subjects, style, and existing lettering except where the request calls for changes. Return the edited image only.'},
         {inlineData: {mimeType: result.type, data: (await asDataUrl(result)).split(',')[1]}},
         {text: allowText.checked ? changes : `${changes}\nDo not add new lettering outside logos.`}
-      ] : await generationParts(concept, allowText.checked, $('thumbnail-wording').value.trim());
+      ]} : await generationParts(concept, allowText.checked, $('thumbnail-wording').value.trim());
       const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
         method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
         body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize}}})
@@ -804,7 +849,7 @@
         .find(part => !part.thought && part.inlineData?.data)?.inlineData;
       if (!image) throw new Error('Google did not return an image. Try adjusting your description or references.');
       const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
-      const exported = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height);
+      const exported = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height, targetBrightness);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       result = exported;
       resultUrl = URL.createObjectURL(result);

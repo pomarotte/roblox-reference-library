@@ -30,11 +30,22 @@ class Reader {
   }
 }
 const exportsMade = [];
+const exposureAdjustments = [];
+const brightPixel = [100, 190, 245, 255];
+const darkPixel = [28, 32, 50, 255];
+const galleryPixel = [100, 100, 100, 255];
 const explorer = element('explorer');
 const document = {getElementById: element, querySelectorAll: () => [explorer], createElement: tag => {
   if (tag !== 'canvas') return element(Symbol());
   const canvas = {
-    getContext: () => ({drawImage: (image, ...rectangle) => { canvas.rectangle = rectangle; }}),
+    getContext: () => ({
+      drawImage(image, ...rectangle) {
+        canvas.rectangle = rectangle;
+        canvas.pixel = image.pixel;
+      },
+      getImageData() { return {data: new Uint8ClampedArray(canvas.pixel)}; },
+      putImageData({data}) { exposureAdjustments.push([...data]); }
+    }),
     toBlob: (callback, type) => {
       exportsMade.push({width: canvas.width, height: canvas.height, rectangle: canvas.rectangle, type});
       callback(new Blob([`output-${exportsMade.length}`], {type}));
@@ -87,7 +98,10 @@ let exportedUrl = 0;
 const context = {document, window, Worker, IntersectionObserver, ResizeObserver: class {observe() {}}, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
   static createObjectURL(value) { return value instanceof Blob ? `blob:result-${++exportedUrl}` : 'blob:result'; }
   static revokeObjectURL() {}
-}, createImageBitmap: async () => ({width: 1920, height: 1088, close() {}}), fetch: async (url, options) => {
+}, createImageBitmap: async file => ({
+  width: 1920, height: 1088, close() {},
+  pixel: file.name ? darkPixel : file.type === 'image/webp' ? galleryPixel : brightPixel
+}), fetch: async (url, options) => {
   if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => 'background prompt'};
   if (!options && url.includes('character-references')) return {ok: true, blob: async () => ({type: url.endsWith('.png') ? 'image/png' : 'image/jpeg'})};
   if (url.startsWith('https://references.rolibrary.win/')) {
@@ -215,6 +229,9 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
     checkbox.checked = true;
     checkbox.handlers.change();
   }
+  const galleryColors = galleryTags[6].children[0];
+  galleryColors.checked = true;
+  galleryColors.handlers.change();
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationConfig.imageConfig.imageSize, '2K');
@@ -239,10 +256,10 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(finalInstructions, /Character: @Image 3/);
   assert.match(finalInstructions, /Explicit uses of named images in the description take priority/);
   assert.match(finalInstructions, /replace characters from composition or style images/);
-  assert.match(finalInstructions, /Lighting: @Image 3; Colors: @Image 3/);
+  assert.match(finalInstructions, /Lighting: @Image 3; Colors: @Image 2 \(supporting: @Image 3\)/);
   const colorDirection = requestParts.at(-1).text;
   assert.match(colorDirection, /Use @Image 3 \(Lighting\) for overall exposure/);
-  assert.match(colorDirection, /Use @Image 3 \(Colors\) for the overall palette and saturation/);
+  assert.match(colorDirection, /Use @Image 2 \(Colors\) for the overall palette and saturation/);
   assert.match(colorDirection, /including the sky, background, props, and characters/);
   assert.match(colorDirection, /Ignore conflicting lighting or palette cues from images assigned to other roles/);
   assert.match(colorDirection, /If the exposure reference is dark, keep most of the scene dark/);
@@ -251,6 +268,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready · 1920 × 1080');
   assert.equal(element('thumbnail-upscale').hidden, true);
   assert.deepEqual(exportsMade[0], {width: 1920, height: 1080, rectangle: [0, -4, 1920, 1088], type: 'image/png'});
+  assert.deepEqual(exposureAdjustments, [[24, 46, 60, 255]]);
   selectedRows[1].children[0].children[1].handlers.click();
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
@@ -258,8 +276,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   concept.value = '  ';
   element('thumbnail-resolution').value = '1K';
   const colors = element('thumbnail-references').children[0].children[1].children[6].children[0];
-  colors.checked = true;
-  colors.handlers.change();
+  assert.equal(colors.checked, true);
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 2);
   assert.equal(calls[1].generationConfig.imageConfig.imageSize, '1K');
@@ -270,6 +287,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   colors.checked = false;
   colors.handlers.change();
   assert.deepEqual(exportsMade[1], {width: 960, height: 540, rectangle: [0, -2, 960, 544], type: 'image/png'});
+  assert.deepEqual(exposureAdjustments[1], [63, 120, 154, 255]);
   assert.equal(element('thumbnail-upscale').hidden, false);
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
   element('thumbnail-upload').handlers.change({target: {files: Array(5).fill(file), value: 'selected'}});
@@ -321,6 +339,7 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(atob(firstEdit[1].inlineData.data), 'output-4');
   assert.match(firstEdit[2].text, /^Make the sky purple\nDo not add new lettering outside logos\.$/);
   assert.equal(element('thumbnail-status').textContent, 'Edit ready · 960 × 540');
+  assert.equal(exposureAdjustments.length, 2);
   const editedDownload = element('thumbnail-download').href;
   editInput.value = 'Make it darker';
   failGeneration = true;
