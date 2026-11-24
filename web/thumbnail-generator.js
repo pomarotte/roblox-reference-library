@@ -8,8 +8,8 @@
     'Composition': 'framing, camera viewpoint (first person or third person), camera angle, subject placement, scale, and layout',
     'Environment': 'setting, background, and environmental details',
     'Character': 'the exact subject identity, silhouette, anatomy, head and face, distinctive features, clothing, and colors; replace subjects from other references with this character',
-    'Lighting': 'match exposure and brightness, light sources and direction, shadow depth, and contrast; preserve a dark image as dark',
-    'Colors': 'match dominant hues, saturation, darkness, and overall color balance; do not brighten or add unrelated colors',
+    'Lighting': 'match overall scene exposure, light direction and intensity, shadow depth, and contrast',
+    'Colors': 'match the scene palette, dominant hues, and saturation; also match overall brightness and contrast when no Lighting reference is assigned',
     'Object': 'include the referenced prop or vehicle and preserve its recognizable shape, materials and details',
     'Logo': 'place the complete referenced logo, preserving its graphic mark and any lettering, spelling, and typography that are part of the logo, even when other text is disabled',
     'Text style': 'when text is enabled, use the typeface, weight, color, outline and effects as inspiration for the requested wording'
@@ -713,7 +713,16 @@
       parts.push({text: 'Keep the primary Composition camera viewpoint unless the description assigns a different viewpoint or Composition image. If first person, frame the scene through the player’s eyes with only visible hands, arms, or equipment. A player mentioned in the description remains the viewpoint character unless a different camera is explicitly requested.'});
     }
     if (assigned.length) {
-      parts.push({text: `Default reference assignments: ${assigned.join('; ')}. Explicit uses of named images in the description take priority for the specified aspects. Combine the remaining assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images. Use Lighting for exposure, illumination and shadows. Use Colors for palette, saturation and the balance of dark and light tones. If Colors is assigned without Lighting, match the overall brightness and contrast of the Colors image too. Apply this to the environment as well as the subject.`});
+      parts.push({text: `Default reference assignments: ${assigned.join('; ')}. Explicit uses of named images in the description take priority for the specified aspects. Combine the remaining assignments independently. For a Character assignment, use that character as the subject and replace characters from composition or style images.`});
+    }
+    const lighting = selected.find(reference => reference.tags.has('Lighting'));
+    const colors = selected.find(reference => reference.tags.has('Colors'));
+    if (lighting || colors) {
+      const exposure = lighting
+        ? `Use @${lighting.name} (Lighting) for overall exposure, light direction and intensity, shadow depth, and contrast.`
+        : `Use @${colors.name} (Colors) for overall brightness and contrast as well as palette.`;
+      const palette = colors && lighting ? ` Use @${colors.name} (Colors) for the overall palette and saturation.` : '';
+      parts.push({text: `Final lighting and color direction, unless the description explicitly overrides these aspects: ${exposure}${palette} Apply these assignments across the full frame, including the sky, background, props, and characters. Ignore conflicting lighting or palette cues from images assigned to other roles. If the exposure reference is dark, keep most of the scene dark and use localized highlights to make the subjects readable. Avoid bright daylight or washed-out shadows unless they appear in the exposure reference or the description requests them.`});
     }
     return parts;
   }

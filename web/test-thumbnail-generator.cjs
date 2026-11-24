@@ -210,6 +210,11 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(element('thumbnail-status').textContent, /at least one tag/);
   character.checked = true;
   character.handlers.change();
+  for (const tag of uploadTags.slice(5, 7)) {
+    const checkbox = tag.children[0];
+    checkbox.checked = true;
+    checkbox.handlers.change();
+  }
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationConfig.imageConfig.imageSize, '2K');
@@ -226,14 +231,21 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.doesNotMatch(requestParts[3].text, /Character:/);
   assert.equal(requestParts[4].inlineData.mimeType, 'image/webp');
   assert.equal(requestParts.filter(part => part.inlineData).length, 2);
-  const finalInstructions = requestParts.at(-1).text;
+  const finalInstructions = requestParts.at(-2).text;
+  assert.match(finalInstructions, /Visual style: @Image 2/);
   assert.match(finalInstructions, /Composition: @Image 2/);
   assert.ok(requestParts.some(part => part.text?.includes('frame the scene through the player’s eyes')));
   assert.match(finalInstructions, /Environment: @Image 2/);
   assert.match(finalInstructions, /Character: @Image 3/);
   assert.match(finalInstructions, /Explicit uses of named images in the description take priority/);
   assert.match(finalInstructions, /replace characters from composition or style images/);
-  assert.match(finalInstructions, /match the overall brightness and contrast of the Colors image/);
+  assert.match(finalInstructions, /Lighting: @Image 3; Colors: @Image 3/);
+  const colorDirection = requestParts.at(-1).text;
+  assert.match(colorDirection, /Use @Image 3 \(Lighting\) for overall exposure/);
+  assert.match(colorDirection, /Use @Image 3 \(Colors\) for the overall palette and saturation/);
+  assert.match(colorDirection, /including the sky, background, props, and characters/);
+  assert.match(colorDirection, /Ignore conflicting lighting or palette cues from images assigned to other roles/);
+  assert.match(colorDirection, /If the exposure reference is dark, keep most of the scene dark/);
   assert.equal(calls[0].generationConfig.imageConfig.aspectRatio, '16:9');
   assert.match(background.text, /Do not add titles, captions/);
   assert.equal(element('thumbnail-status').textContent, 'Thumbnail ready · 1920 × 1080');
@@ -245,12 +257,18 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.match(element('thumbnail-status').textContent, /Remove or replace @image 3/);
   concept.value = '  ';
   element('thumbnail-resolution').value = '1K';
+  const colors = element('thumbnail-references').children[0].children[1].children[6].children[0];
+  colors.checked = true;
+  colors.handlers.change();
   await element('thumbnail-form').handlers.submit({preventDefault() {}});
   assert.equal(calls.length, 2);
   assert.equal(calls[1].generationConfig.imageConfig.imageSize, '1K');
   assert.match(calls[1].contents[0].parts[0].text, /using the attached images according to their reference tags/);
   assert.equal(calls[1].contents[0].parts.filter(part => part.inlineData).length, 7);
   assert.match(calls[1].contents[0].parts[3].text, /character reference sheets/);
+  assert.match(calls[1].contents[0].parts.at(-1).text, /Use @Image 2 \(Colors\) for overall brightness and contrast as well as palette/);
+  colors.checked = false;
+  colors.handlers.change();
   assert.deepEqual(exportsMade[1], {width: 960, height: 540, rectangle: [0, -2, 960, 544], type: 'image/png'});
   assert.equal(element('thumbnail-upscale').hidden, false);
   element('thumbnail-upload').handlers.change({target: {files: [file], value: 'selected'}});
