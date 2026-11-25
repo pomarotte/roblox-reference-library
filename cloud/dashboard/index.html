@@ -15,7 +15,10 @@
       <h2 id="connection-title">Connect Roblox</h2>
       <form id="connection" autocomplete="off">
         <label>Universe ID<input id="universe" inputmode="numeric" pattern="[1-9][0-9]{0,19}" required></label>
-        <label>Roblox Open Cloud key<input id="key" type="password" maxlength="1024" required></label>
+        <div>
+          <label>Roblox Open Cloud key<input id="key" type="password" maxlength="1024" required></label>
+          <a class="field-help" href="https://create.roblox.com/dashboard/credentials?activeTab=ApiKeysTab" target="_blank" rel="noopener noreferrer">Get an Open Cloud key ↗</a>
+        </div>
         <label>Last activation time <small>(local time)</small><input id="activated" type="datetime-local"></label>
         <div class="actions"><button id="refresh" type="submit">Connect and load</button><button id="disconnect" type="button" hidden>Disconnect Roblox</button></div>
       </form>

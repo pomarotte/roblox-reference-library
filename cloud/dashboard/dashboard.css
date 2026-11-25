@@ -12,6 +12,7 @@ section { padding: clamp(1rem, 3vw, 1.5rem); margin: 1rem 0; border: 1px solid #
 form, .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
 label { display: grid; gap: .35rem; font-size: .9rem; }
 label small { display: inline; }
+.field-help { display: inline-block; margin-top: .35rem; font-size: .9rem; }
 input, button { font: inherit; border: 1px solid #454553; border-radius: 6px; min-width: 0; padding: .5rem .65rem; }
 input { background: #121216; }
 button { background: #c7ebff; color: #172432; cursor: pointer; font-weight: 600; }

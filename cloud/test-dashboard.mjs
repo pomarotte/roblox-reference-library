@@ -44,7 +44,9 @@ try {
   assert.equal((await performance({...credentials, universe: '../wrong'})).status, 400);
   assert.equal(requests, 0);
   assert.deepEqual(await (await open('/api/session')).json(), {email: 'creator@example.com'});
-  assert.match(await (await open('/')).text(), /Rotation activity/);
+  const dashboard = await (await open('/')).text();
+  assert.match(dashboard, /Rotation activity/);
+  assert.ok(dashboard.includes('href="https://create.roblox.com/dashboard/credentials?activeTab=ApiKeysTab" target="_blank"'));
   const result = await performance(credentials);
   assert.equal(result.status, 200);
   assert.equal(result.headers.get('Cache-Control'), 'no-store');
