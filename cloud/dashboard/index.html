@@ -12,17 +12,23 @@
   <main>
     <h1>Thumbnail analytics</h1>
     <section aria-labelledby="connection-title">
-      <h2 id="connection-title">Connect Roblox</h2>
+      <h2 id="connection-title">Roblox experiences</h2>
+      <div id="game-switcher" class="actions" hidden>
+        <label for="games">Selected game</label>
+        <select id="games"><option value="">Add a game</option></select>
+        <button id="add-game" class="secondary" type="button">Add another game</button>
+      </div>
       <form id="connection" autocomplete="off">
         <label>Universe ID<input id="universe" inputmode="numeric" pattern="[1-9][0-9]{0,19}" required></label>
+        <label>Game name (optional)<input id="game-name" maxlength="60" placeholder="For the game switcher"></label>
         <div>
           <label>Roblox Open Cloud key<input id="key" type="password" maxlength="1024" required></label>
           <a class="field-help" href="https://create.roblox.com/dashboard/credentials?activeTab=ApiKeysTab" target="_blank" rel="noopener noreferrer">Get an Open Cloud key ↗</a>
         </div>
         <label>Last activation time <small>(local time)</small><input id="activated" type="datetime-local"></label>
-        <div class="actions"><button id="refresh" type="submit">Connect and load</button><button id="disconnect" type="button" hidden>Disconnect Roblox</button></div>
+        <div class="actions"><button id="refresh" type="submit">Connect and load</button><button id="disconnect" class="secondary" type="button" hidden>Disconnect this game</button></div>
       </form>
-      <p class="muted">Use an experience-scoped key with thumbnail and analytics read access. The key is used for this tab session. Enter the last activation time after a rotation to compare the current set.</p>
+      <p class="muted">Give each game its Universe ID and a key with thumbnail and analytics read access. Reloading or leaving this page clears the connections. After a rotation, enter the last activation time to compare the current set.</p>
       <p id="connection-status" role="status"></p>
     </section>
     <section id="performance" aria-labelledby="performance-title" hidden>
@@ -33,16 +39,37 @@
         <div><dt>Rotation readiness</dt><dd id="readiness"></dd></div>
       </dl>
       <p id="window" class="muted"></p>
-      <div class="table-wrap"><table>
-        <thead><tr><th scope="col">Home thumbnail</th><th scope="col">Impressions</th><th scope="col">Qualified plays</th><th scope="col">Qualified play rate</th><th scope="col">Progress to minimum</th></tr></thead>
+      <div id="charts" class="charts" hidden>
+        <div class="chart">
+          <h3>Qualified play rate</h3>
+          <ol id="rates" class="chart-rows"></ol>
+          <p id="rate-scale" class="chart-scale muted"></p>
+        </div>
+        <div class="chart">
+          <h3>Impressions toward rotation</h3>
+          <ol id="impressions" class="chart-rows"></ol>
+        </div>
+        <div id="trend-card" class="chart trend" hidden>
+          <div class="section-header"><h3>Performance over time</h3><label>Metric<select id="trend-metric"><option value="rate">Qualified play rate</option><option value="views">Impressions</option></select></label></div>
+          <canvas id="trend" role="img" aria-label="Thumbnail performance over time"></canvas>
+          <ul id="trend-legend" class="trend-legend"></ul>
+          <p id="trend-timezone" class="muted"></p>
+        </div>
+      </div>
+      <p id="empty-performance" hidden></p>
+      <details id="exact-data"><summary>Exact numbers</summary><div class="table-wrap"><table>
+        <thead><tr><th scope="col">Home thumbnail</th><th scope="col">Impressions</th><th scope="col">Qualified plays</th><th scope="col">Qualified play rate</th></tr></thead>
         <tbody id="scores"></tbody>
-      </table></div>
+      </table></div></details>
     </section>
     <section aria-labelledby="watch-title">
       <h2 id="watch-title">Rotation activity</h2>
-      <label>Load a watcher report<input id="report" type="file" accept=".json,application/json"></label>
-      <p id="report-status" class="muted" role="status">Choose the JSON report from the local rotation watcher.</p>
-      <ol id="events"></ol>
+      <details>
+        <summary>Import local watcher activity</summary>
+        <label>Load a watcher report<input id="report" type="file" accept=".json,application/json"></label>
+        <p id="report-status" class="muted" role="status">Choose the JSON report from the local rotation watcher.</p>
+        <ol id="events"></ol>
+      </details>
     </section>
   </main>
 </body>

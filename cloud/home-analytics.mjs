@@ -59,7 +59,7 @@ export function homeAnalytics(universe, key) {
     ]));
   }
 
-  async function scores(candidates, start, end, granularity) {
+  async function scores(candidates, start, end, granularity, trendHours = 0) {
     const assetIds = candidates.map(item => String(item.assetId));
     const [impressions, plays] = await Promise.all(['ThumbnailImpressions', 'ThumbnailQualifiedPlays'].map(metric =>
       thumbnailMetric(metric, start.toISOString(), end.toISOString(), assetIds, granularity)));
@@ -69,13 +69,28 @@ export function homeAnalytics(universe, key) {
         const views = impressions.get(id)?.get(time), qualified = plays.get(id)?.get(time);
         return views > 0 && qualified >= 0 && qualified <= views;
       });
-    });
+    }).sort((a, b) => Date.parse(a) - Date.parse(b));
     return candidates.map(variant => {
       const id = String(variant.assetId);
-      const views = buckets.reduce((sum, time) => sum + impressions.get(id).get(time), 0);
-      const qualifiedPlays = buckets.reduce((sum, time) => sum + plays.get(id).get(time), 0);
-      return {homeId: variant.homepageThumbnailId, assetId: id, impressions: views, qualifiedPlays,
+      const timeline = new Map();
+      let views = 0, qualifiedPlays = 0;
+      for (const time of buckets) {
+        const impressionsInBucket = impressions.get(id).get(time), playsInBucket = plays.get(id).get(time);
+        views += impressionsInBucket;
+        qualifiedPlays += playsInBucket;
+        if (trendHours) {
+          const interval = trendHours * hour;
+          const at = Math.floor(Date.parse(time) / interval) * interval;
+          const point = timeline.get(at) || {at, impressions: 0, qualifiedPlays: 0};
+          point.impressions += impressionsInBucket;
+          point.qualifiedPlays += playsInBucket;
+          timeline.set(at, point);
+        }
+      }
+      const row = {homeId: variant.homepageThumbnailId, assetId: id, impressions: views, qualifiedPlays,
         qualifiedPlayRate: views ? qualifiedPlays / views : null};
+      if (trendHours) row.timeline = [...timeline.values()];
+      return row;
     }).sort((a, b) => b.qualifiedPlayRate - a.qualifiedPlayRate);
   }
 

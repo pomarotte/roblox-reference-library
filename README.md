@@ -134,9 +134,9 @@ Enter the activation time as `YYYY-MM-DDTHH:MM:SSZ`. Once Roblox approves the ch
 
 ### Follow performance in the analytics dashboard
 
-Sign in with a one-time code sent to an allowed email address, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. It refreshes every five minutes while the tab is visible and shows each active thumbnail’s impressions, qualified plays, qualified play rate, and progress toward the rotation threshold. Enter the last activation time after changing the active set. The dashboard keeps the Roblox key in tab memory until you disconnect or close or leave the page.
+Sign in with a one-time code sent to an allowed email address, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. Use **Add another game** and the **Selected game** menu to switch between experiences in one browser tab. The dashboard refreshes the selected game every five minutes while the tab is visible. It charts each thumbnail’s qualified play rate, progress toward the rotation threshold, and performance over time using shared completed reporting hours. Expand **Exact numbers** for the underlying totals. Enter the last activation time after changing the active set. The dashboard clears keys when you disconnect a game, reload, or leave the page.
 
-To see the watcher’s last check, decisions, and next scheduled check, set `ROLIBRARY_WATCH_REPORT` to a dedicated JSON path before starting `watch` or running `rotate`. Select that file under **Rotation activity**. Select the updated file again after later checks. The activity report contains thumbnail IDs and status messages.
+To see the watcher’s last check, decisions, and next scheduled check, set `ROLIBRARY_WATCH_REPORT` to a dedicated JSON path before starting `watch` or running `rotate`. Select that file under **Import local watcher activity**. Select the updated file again after later checks. The activity report contains thumbnail IDs and status messages.
 
 See [dashboard deployment](cloud/README.md#private-thumbnail-analytics-dashboard) for the website owner’s one-time Cloudflare setup.
 

@@ -1,4 +1,4 @@
-import {activeThumbnails, homeAnalytics, reportingWindow, rotationMinimum} from './home-analytics.mjs';
+import {activeThumbnails, homeAnalytics, hour, reportingWindow, rotationMinimum} from './home-analytics.mjs';
 
 const headers = {
   'Cache-Control': 'no-store',
@@ -46,12 +46,13 @@ export async function serveDashboard(request, env, ctx, assets) {
     catch { return json({error: 'Enter the last activation time within the past 29 days.'}, 400); }
     const {start, end} = window;
     const active = activeThumbnails(config);
+    const trendHours = end - start <= 48 * hour ? 1 : 24;
     const rows = start < end && active.length
-      ? await scores(active, start, end, 'OneHour')
+      ? await scores(active, start, end, 'OneHour', trendHours)
       : active.map(item => ({homeId: item.homepageThumbnailId, assetId: String(item.assetId),
-        impressions: 0, qualifiedPlays: 0, qualifiedPlayRate: null}));
+        impressions: 0, qualifiedPlays: 0, qualifiedPlayRate: null, timeline: []}));
     return json({universe, activatedAt: startTime, windowStart: start.toISOString(), windowEnd: end.toISOString(),
-      checkedAt: new Date(now).toISOString(), minimum: rotationMinimum, rows});
+      checkedAt: new Date(now).toISOString(), minimum: rotationMinimum, trendHours, rows});
   } catch (error) {
     if (/HTTP (401|403) /.test(error.message)) {
       return json({error: 'Roblox denied access. Check the key, Universe ID, and thumbnail and analytics read permissions.'}, 403);
