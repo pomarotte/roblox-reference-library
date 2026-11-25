@@ -4,7 +4,16 @@ compatibility_date = "2026-11-24"
 workers_dev = false
 preview_urls = false
 
-routes = [{ pattern = "analytics.rolibrary.win", custom_domain = true }]
+routes = [
+  { pattern = "analytics.rolibrary.win", custom_domain = true },
+  { pattern = "watch.rolibrary.win", custom_domain = true }
+]
+
+[[d1_databases]]
+binding = "WATCH_ACTIVITY"
+database_name = "rolibrary-watch-activity"
+database_id = "5302cd78-27cb-4009-8528-6a90eac4b5f9"
+migrations_dir = "dashboard-migrations"
 
 [[rules]]
 type = "Text"

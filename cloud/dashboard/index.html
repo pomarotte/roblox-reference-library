@@ -64,12 +64,23 @@
     </section>
     <section aria-labelledby="watch-title">
       <h2 id="watch-title">Rotation activity</h2>
-      <details>
-        <summary>Import local watcher activity</summary>
-        <label>Load a watcher report<input id="report" type="file" accept=".json,application/json"></label>
-        <p id="report-status" class="muted" role="status">Choose the JSON report from the local rotation watcher.</p>
-        <ol id="events"></ol>
-      </details>
+      <p id="activity-empty" class="muted">Connect a game to see its rotation activity.</p>
+      <div id="activity-connected" hidden>
+        <p id="activity-status" class="muted" role="status"></p>
+        <details id="activity-setup">
+          <summary>Set up live activity</summary>
+          <p class="muted">Generate a token for this game and set <code>ROLIBRARY_WATCH_TOKEN</code> in the terminal before starting the local watcher. Replacing the token disconnects the previous watcher.</p>
+          <div class="actions">
+            <button id="pair-watcher" type="button">Generate watcher token</button>
+            <button id="unpair-watcher" class="secondary" type="button" hidden>Stop live updates</button>
+          </div>
+          <div id="watcher-token-field" hidden>
+            <label>Watcher token<input id="watcher-token" type="text" readonly autocomplete="off"></label>
+            <button id="copy-token" class="secondary" type="button">Copy PowerShell setup</button>
+          </div>
+        </details>
+        <ol id="events" class="activity-events"></ol>
+      </div>
     </section>
   </main>
 </body>

@@ -1,4 +1,5 @@
 import {activeThumbnails, homeAnalytics, hour, reportingWindow, rotationMinimum} from './home-analytics.mjs';
+import {dashboardActivity, watchHost, watcherIngest} from './dashboard-activity.mjs';
 
 const headers = {
   'Cache-Control': 'no-store',
@@ -9,7 +10,11 @@ const headers = {
 const json = (data, status = 200) => Response.json(data, {status, headers});
 
 export async function serveDashboard(request, env, ctx, assets) {
-  const {pathname, origin} = new URL(request.url);
+  const {pathname, origin, hostname} = new URL(request.url);
+  if (hostname === watchHost) {
+    try { return await watcherIngest(request, env.WATCH_ACTIVITY); }
+    catch { return json({error: 'Watcher activity is temporarily unavailable.'}, 503); }
+  }
   if (!env.ACCESS_AUDIENCE || ctx.access?.aud !== env.ACCESS_AUDIENCE) {
     return json({error: 'Sign in through RoLibrary’s Cloudflare Access application.'}, 403);
   }
@@ -21,6 +26,12 @@ export async function serveDashboard(request, env, ctx, assets) {
   if (request.method === 'GET' && pathname === '/api/session') {
     const identity = await ctx.access.getIdentity();
     return identity?.email ? json({email: identity.email}) : json({error: 'Sign in with your authorized email address.'}, 403);
+  }
+  if (pathname === '/api/activity') {
+    const identity = await ctx.access.getIdentity();
+    if (!identity?.email) return json({error: 'Sign in with your authorized email address.'}, 403);
+    try { return await dashboardActivity(request, env.WATCH_ACTIVITY, identity.email.toLowerCase()); }
+    catch { return json({error: 'Watcher activity is temporarily unavailable.'}, 503); }
   }
   if (pathname !== '/api/performance') return json({error: 'Page not found.'}, 404);
   if (request.method !== 'POST') return json({error: 'Use POST.'}, 405);

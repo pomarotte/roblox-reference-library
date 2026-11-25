@@ -17,11 +17,21 @@ console.table = values => messages.push(values);
 const originalArgv = process.argv;
 const originalKey = process.env.ROBLOX_API_KEY;
 const originalReport = process.env.ROLIBRARY_WATCH_REPORT;
+const originalWatchToken = process.env.ROLIBRARY_WATCH_TOKEN;
 const originalFetch = globalThis.fetch;
+const watcherEvents = [];
 process.env.ROBLOX_API_KEY = 'test-key';
+process.env.ROLIBRARY_WATCH_TOKEN = '1'.repeat(64);
 
 globalThis.fetch = async (url, options) => {
   const parsed = new URL(url);
+  if (parsed.origin === 'https://watch.rolibrary.win') {
+    assert.equal(parsed.pathname, '/events');
+    assert.equal(options.headers.Authorization, `Bearer ${process.env.ROLIBRARY_WATCH_TOKEN}`);
+    assert.equal(options.headers['x-api-key'], undefined);
+    watcherEvents.push(JSON.parse(options.body));
+    return Response.json({accepted: true}, {status: 202});
+  }
   assert.equal(parsed.origin, 'https://apis.roblox.com');
   assert.equal(options.headers['x-api-key'], 'test-key');
   assert.equal(options.redirect, 'error');
@@ -106,6 +116,13 @@ try {
   assert.equal(report.universe, '123');
   assert.equal(report.challenger, 'f');
   assert.match(report.events[0].message, /replaced a with f/);
+  const [watchStarted, watchChanged] = watcherEvents.slice(-2);
+  assert.equal(watchStarted.status, 'checking');
+  assert.equal(watchChanged.status, 'changed');
+  assert.equal(watchChanged.universe, '123');
+  assert.equal(watchChanged.challenger, 'f');
+  assert.equal(watchChanged.nextCheck, null);
+  assert.match(watchChanged.message, /replaced a with f/);
   applied = undefined;
   await invoke('rotate', started, 'f');
   assert.match(messages.at(-1), /already active/);
@@ -119,6 +136,8 @@ try {
   else process.env.ROBLOX_API_KEY = originalKey;
   if (originalReport === undefined) delete process.env.ROLIBRARY_WATCH_REPORT;
   else process.env.ROLIBRARY_WATCH_REPORT = originalReport;
+  if (originalWatchToken === undefined) delete process.env.ROLIBRARY_WATCH_TOKEN;
+  else process.env.ROLIBRARY_WATCH_TOKEN = originalWatchToken;
   globalThis.fetch = originalFetch;
   console.log = log;
   console.table = table;

@@ -10,7 +10,7 @@ const localTime = value => new Date(value).toLocaleString(undefined, {dateStyle:
 const utcDay = new Intl.DateTimeFormat(undefined, {month: 'short', day: 'numeric', timeZone: 'UTC'});
 const chartColors = ['#79cafa', '#f5ab79', '#b5a5ff', '#79daba', '#f292b6'];
 const games = new Map();
-let connection, activeRequest;
+let connection, activeRequest, activityRequest;
 
 async function responseData(response) {
   if (response.redirected || !response.headers.get('Content-Type')?.includes('application/json')) {
@@ -190,6 +190,7 @@ async function loadPerformance() {
     status.textContent = '';
     keyInput.placeholder = 'Connected for this tab';
     refresh.textContent = 'Refresh analytics';
+    updateActivity();
   } catch (error) {
     if (activeRequest === request) status.textContent = error.message;
   } finally {
@@ -207,14 +208,15 @@ form.addEventListener('submit', event => {
   const existing = games.get(universe);
   const key = keyInput.value.trim() || existing?.key;
   const time = activationInput.value;
-  const activatedAt = time ? new Date(time).toISOString() : undefined;
+  const activatedAt = time === existing?.localActivation ? existing.activatedAt
+    : time ? new Date(time).toISOString() : undefined;
   if (!key) return;
   if (connection?.universe !== universe) {
     panel.hidden = true;
     get('scores').replaceChildren();
   }
   connection = {key, universe, activatedAt, localActivation: time, name: nameInput.value.trim(),
-    data: existing?.data};
+    data: existing?.data, activity: existing?.activity};
   keyInput.required = !existing;
   keyInput.value = '';
   loadPerformance();
@@ -222,7 +224,9 @@ form.addEventListener('submit', event => {
 
 function showGame(game) {
   activeRequest?.abort();
+  activityRequest?.abort();
   activeRequest = undefined;
+  activityRequest = undefined;
   connection = game;
   universeInput.value = game?.universe || '';
   universeInput.readOnly = Boolean(game);
@@ -238,10 +242,18 @@ function showGame(game) {
   status.textContent = '';
   renderGames();
   if (game?.data) render(game.data);
+  get('activity-empty').hidden = Boolean(game);
+  get('activity-connected').hidden = !game;
+  get('activity-setup').open = false;
+  get('watcher-token').value = '';
+  get('watcher-token-field').hidden = true;
+  get('copy-token').textContent = 'Copy PowerShell setup';
+  renderActivity(game?.activity);
 }
 get('add-game').addEventListener('click', () => { showGame(); universeInput.focus(); });
 gameSelect.addEventListener('change', () => {
   showGame(games.get(gameSelect.value));
+  updateActivity();
   loadPerformance();
 });
 disconnect.addEventListener('click', () => {
@@ -253,21 +265,96 @@ metricSelect.addEventListener('change', drawTrend);
 new ResizeObserver(drawTrend).observe(trend);
 setInterval(() => { if (!document.hidden) loadPerformance(); }, 5 * 60 * 1000);
 
-get('report').addEventListener('change', async event => {
-  const file = event.target.files[0];
-  event.target.value = '';
-  const note = get('report-status'), events = get('events');
-  events.replaceChildren();
-  if (!file) return;
+function renderActivity(activity) {
+  const {paired, events = []} = activity || {};
+  const latest = events[0];
+  get('pair-watcher').textContent = paired ? 'Replace watcher token' : 'Generate watcher token';
+  get('unpair-watcher').hidden = !paired;
+  get('activity-status').textContent = latest?.nextCheck
+    ? `Next check ${localTime(latest.nextCheck)} · Challenger ${latest.challenger}`
+    : latest ? `Last check-in ${localTime(latest.at)} · Challenger ${latest.challenger}`
+      : paired ? 'Waiting for the first watcher check-in.' : 'Connect the local watcher to see live rotation updates.';
+  get('events').replaceChildren(...events.map(event => {
+    const item = document.createElement('li'), time = document.createElement('time');
+    const message = document.createElement('p');
+    item.dataset.status = event.status;
+    time.dateTime = new Date(event.at).toISOString();
+    time.textContent = localTime(event.at);
+    message.textContent = event.message;
+    item.append(message, time);
+    return item;
+  }));
+}
+
+function activityUrl(game) {
+  return `/api/activity?universe=${encodeURIComponent(game.universe)}`;
+}
+
+async function updateActivity() {
+  const game = connection;
+  if (!game?.data || activityRequest) return;
+  get('activity-empty').hidden = true;
+  get('activity-connected').hidden = false;
+  const request = activityRequest = new AbortController();
   try {
-    if (file.size > 100_000) throw new Error();
-    const report = JSON.parse(await file.text());
-    if (report.version !== 1 || !/^[1-9]\d{0,19}$/.test(report.universe) || !Array.isArray(report.events)) throw new Error();
-    note.textContent = `Universe ${report.universe} · Challenger ${report.challenger}${report.nextCheck ? ` · Next scheduled check ${localTime(report.nextCheck)}` : ''}`;
-    events.replaceChildren(...report.events.slice(-30).reverse().map(({at, message}) => {
-      const item = document.createElement('li');
-      item.textContent = `${localTime(at)} · ${message}`;
-      return item;
+    const activity = await responseData(await fetch(activityUrl(game), {signal: request.signal}));
+    if (activityRequest !== request || connection !== game) return;
+    game.activity = activity;
+    renderActivity(activity);
+    const changedAt = activity.lastRotationAt;
+    if (changedAt > Date.parse(game.activatedAt || game.data.activatedAt)) {
+      const rotation = new Date(changedAt);
+      game.activatedAt = rotation.toISOString();
+      game.localActivation = new Date(changedAt - rotation.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+      activationInput.value = game.localActivation;
+      activeRequest?.abort();
+      activeRequest = undefined;
+      loadPerformance();
+    }
+  } catch (error) {
+    if (activityRequest === request) get('activity-status').textContent = error.message;
+  } finally {
+    if (activityRequest === request) activityRequest = undefined;
+  }
+}
+
+async function changeWatcher(method) {
+  const game = connection;
+  if (!game?.data) return;
+  const pair = get('pair-watcher'), unpair = get('unpair-watcher');
+  if (pair.disabled) return;
+  pair.disabled = unpair.disabled = true;
+  activityRequest?.abort();
+  const request = activityRequest = new AbortController();
+  try {
+    const result = await responseData(await fetch(activityUrl(game), {
+      method, headers: {'Content-Type': 'application/json'}, signal: request.signal
     }));
-  } catch { note.textContent = 'Choose a valid rotation watcher report.'; }
+    if (connection !== game || activityRequest !== request) return;
+    get('watcher-token').value = result.token || '';
+    get('watcher-token-field').hidden = !result.token;
+    get('copy-token').textContent = 'Copy PowerShell setup';
+    activityRequest = undefined;
+    await updateActivity();
+  } catch (error) {
+    if (activityRequest === request) get('activity-status').textContent = error.message;
+  } finally {
+    if (activityRequest === request) activityRequest = undefined;
+    pair.disabled = unpair.disabled = false;
+  }
+}
+
+get('pair-watcher').addEventListener('click', () => changeWatcher('POST'));
+get('unpair-watcher').addEventListener('click', () => changeWatcher('DELETE'));
+get('copy-token').addEventListener('click', async () => {
+  const field = get('watcher-token');
+  if (!field.value) return;
+  try {
+    await navigator.clipboard.writeText(`$env:ROLIBRARY_WATCH_TOKEN = '${field.value}'`);
+    get('copy-token').textContent = 'Copied PowerShell setup';
+  } catch {
+    field.focus();
+    field.select();
+  }
 });
+setInterval(() => { if (!document.hidden) updateActivity(); }, 15_000);

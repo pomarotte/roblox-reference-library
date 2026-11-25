@@ -57,5 +57,12 @@ th { font-size: .85rem; }
 summary { cursor: pointer; }
 details > label { margin-top: .75rem; }
 @media (max-width: 650px) { .charts { grid-template-columns: 1fr; } }
-#report { max-width: 22rem; }
+#watcher-token-field { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-top: .75rem; }
+#watcher-token-field label { flex: 1 1 16rem; max-width: 34rem; }
+.activity-events { list-style: none; padding: 0; margin: .85rem 0 0; }
+.activity-events li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .4rem 1rem; padding: .7rem 0; border-top: 1px solid #303039; }
+.activity-events p { margin: 0; }
+.activity-events time { color: #b0afbb; font-size: .84rem; }
+.activity-events li[data-status="changed"] p { color: #79daba; }
+@media (max-width: 650px) { .activity-events li { grid-template-columns: 1fr; } }
 li { margin: .55rem 0; }

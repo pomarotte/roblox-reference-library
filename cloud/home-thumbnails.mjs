@@ -115,7 +115,7 @@ async function rotate(start, challenger, baseline, log) {
   const current = homeIds(config);
   if (current.length < 2 || current.length > 5) throw new Error('Activate 2–5 Home thumbnails before rotating.');
   if (current.includes(challenger)) {
-    log(`Challenger ${challenger} is already active.`);
+    log(`Challenger ${challenger} is already active.`, 'complete');
     return true;
   }
   if (baseline && (baseline.id !== config.id || !sameSet(current, homeIds(baseline)))) {
@@ -132,7 +132,7 @@ async function rotate(start, challenger, baseline, log) {
   if (current.length < 5) {
     console.log(`Adding ${challenger} to an open slot.`);
     await activate([...current, challenger], config);
-    log(`Challenger ${challenger} added to an open slot.`);
+    log(`Challenger ${challenger} added to an open slot.`, 'changed');
     return true;
   }
   const end = new Date(Math.floor(Date.now() / hour) * hour);
@@ -152,7 +152,7 @@ async function rotate(start, challenger, baseline, log) {
   }
   console.log(`Keeping leader ${leader.homeId} (image asset ${leader.assetId}) and replacing ${lowest.homeId} with ${challenger}.`);
   await activate([...current.filter(id => id !== lowest.homeId), challenger], config);
-  log(`Kept leader ${leader.homeId} and replaced ${lowest.homeId} with ${challenger}.`);
+  log(`Kept leader ${leader.homeId} and replaced ${lowest.homeId} with ${challenger}.`, 'changed');
   return true;
 }
 
@@ -166,13 +166,28 @@ async function reviewRotation(timestamp, challenger, interval) {
   }
   const {start} = reportingWindow(timestamp);
   const reportPath = process.env.ROLIBRARY_WATCH_REPORT;
+  const activityToken = process.env.ROLIBRARY_WATCH_TOKEN?.trim();
   const report = {version: 1, universe, challenger, events: []};
-  const log = message => {
+  const log = (message, status = 'waiting') => {
     console.log(message);
-    report.events.push({at: new Date().toISOString(), message});
+    report.events.push({id: randomUUID(), at: new Date().toISOString(), status, message});
     if (report.events.length > 30) report.events.shift();
   };
+  async function publishActivity(event, nextCheck) {
+    if (!activityToken) return;
+    const payload = {...event, universe, challenger, at: Date.parse(event.at), nextCheck};
+    try {
+      const response = await fetch('https://watch.rolibrary.win/events', {
+        method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${activityToken}`},
+        body: JSON.stringify(payload), redirect: 'error', signal: AbortSignal.timeout(5_000)
+      });
+      if (!response.ok) console.error(`Dashboard activity update failed (HTTP ${response.status}). Thumbnail rotation continues.`);
+    } catch {
+      console.error('Could not reach the activity dashboard. Thumbnail rotation continues.');
+    }
+  }
   async function saveReport(nextCheck) {
+    await publishActivity(report.events.at(-1), nextCheck === null ? null : Date.parse(nextCheck));
     if (!reportPath) return;
     const temp = `${reportPath}.${randomUUID()}.tmp`;
     await writeFile(temp, JSON.stringify({...report, nextCheck}) + '\n', {flag: 'wx'});
@@ -180,11 +195,12 @@ async function reviewRotation(timestamp, challenger, interval) {
   }
   let baseline;
   while (Date.now() - startTime < 29 * 24 * hour) {
+    await publishActivity({id: randomUUID(), at: new Date().toISOString(), status: 'checking', message: 'Checking Roblox thumbnail activity.'}, null);
     let result;
     try { result = await rotate(start, challenger, baseline, log); }
     catch (error) {
-      if (reportPath) {
-        log('The check failed. See the watcher terminal for details.');
+      if (reportPath || activityToken) {
+        log('The check failed. See the watcher terminal for details.', 'error');
         await saveReport(null);
       }
       throw error;
@@ -195,7 +211,7 @@ async function reviewRotation(timestamp, challenger, interval) {
     baseline = result;
     await delay(Number(hours) * hour);
   }
-  log('The experiment moved outside the analytics window.');
+  log('The experiment moved outside the analytics window.', 'complete');
   await saveReport(null);
   throw new Error('This experiment is outside the analytics window. Start a new review with a recent activation time.');
 }

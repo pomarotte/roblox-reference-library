@@ -69,7 +69,7 @@ try {
   const elements = new Map();
   const element = (id = Symbol()) => {
     if (!elements.has(id)) elements.set(id, {
-      children: [], listeners: {}, style: {}, value: '',
+      children: [], listeners: {}, style: {}, dataset: {}, value: '',
       addEventListener(event, fn) { this.listeners[event] = fn; },
       replaceChildren(...nodes) { this.children = nodes; },
       append(...nodes) { this.children.push(...nodes); },
@@ -83,14 +83,31 @@ try {
     stroke() {}, fillText() {}, arc() { pointsDrawn++; }, fill() {}
   })});
   const browserCalls = [];
+  const activityReads = [];
+  let paired = false, lastRotationAt = null;
+  const timers = new Map();
   const browser = {
     document: {getElementById: element, createElement: () => element()},
     window: {addEventListener() {}},
-    AbortController, setInterval() {},
+    AbortController, setInterval(fn, interval) { timers.set(interval, fn); },
     Option: class { constructor(text, value) { Object.assign(this, {text, value}); } },
     ResizeObserver: class { observe() {} },
     fetch: async (path, options) => {
       if (path === '/api/session') return Response.json({email: 'creator@example.com'});
+      if (path.startsWith('/api/activity?')) {
+        if (options.method === 'POST') {
+          paired = true;
+          return Response.json({token: 'a'.repeat(64)}, {status: 201});
+        }
+        if (options.method === 'DELETE') {
+          paired = false;
+          return Response.json({paired});
+        }
+        activityReads.push(path);
+        return Response.json({paired, lastRotationAt, events: path.endsWith('=123') ? [{
+          at: lastRotationAt || Date.parse(started), status: 'changed', message: 'Challenger became active.', challenger: 'third'
+        }] : []});
+      }
       const payload = JSON.parse(options.body);
       browserCalls.push(payload);
       return Response.json(payload.universe === '123' ? data : {...data, universe: payload.universe, rows: data.rows.slice(0, 1)});
@@ -109,7 +126,12 @@ try {
   assert.equal(element('rates').children.length, 2);
   assert.equal(element('impressions').children[0].children[2].max, 10_000);
   assert.equal(pointsDrawn, 4);
+  assert.match(element('events').children[0].children[0].textContent, /Challenger became active/);
+  await element('pair-watcher').listeners.click();
+  assert.equal(element('watcher-token').value, 'a'.repeat(64));
+  assert.equal(element('unpair-watcher').hidden, false);
   element('add-game').listeners.click();
+  assert.equal(element('watcher-token').value, '');
   assert.equal(element('universe').value, '');
   assert.equal(element('key').required, true);
   element('universe').value = '456';
@@ -119,21 +141,25 @@ try {
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(element('games').children.map(option => option.value), ['', '123', '456']);
   assert.equal(element('slots').textContent, '1 / 5');
+  assert.equal(element('events').children.length, 0);
   element('games').value = '123';
   element('games').listeners.change();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(element('slots').textContent, '2 / 5');
   assert.deepEqual(browserCalls.map(({universe, key}) => [universe, key]),
     [['123', credentials.key], ['456', 'second-key'], ['123', credentials.key]]);
+  lastRotationAt = Date.now();
+  timers.get(15_000)();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(browserCalls.at(-1).activatedAt, new Date(lastRotationAt).toISOString());
+  assert.ok(activityReads.includes('/api/activity?universe=456'));
+  await element('unpair-watcher').listeners.click();
+  assert.equal(element('unpair-watcher').hidden, true);
   element('disconnect').listeners.click();
   assert.equal(element('games').value, '456');
   assert.equal(element('performance').hidden, false);
   element('disconnect').listeners.click();
   assert.equal(element('performance').hidden, true);
-  await element('report').listeners.change({target: {files: [{size: 100, text: async () => JSON.stringify({
-    version: 1, universe: '123', challenger: 'third', events: [{at: started, message: 'Challenger became active.'}]
-  })}]}});
-  assert.match(element('events').children[0].textContent, /Challenger became active/);
 } finally {
   globalThis.fetch = originalFetch;
 }
