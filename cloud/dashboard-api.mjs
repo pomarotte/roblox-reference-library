@@ -20,7 +20,7 @@ export async function serveDashboard(request, env, ctx, assets) {
   }
   if (request.method === 'GET' && pathname === '/api/session') {
     const identity = await ctx.access.getIdentity();
-    return identity?.email ? json({email: identity.email}) : json({error: 'A signed-in Google account is required.'}, 403);
+    return identity?.email ? json({email: identity.email}) : json({error: 'Sign in with your authorized email address.'}, 403);
   }
   if (pathname !== '/api/performance') return json({error: 'Page not found.'}, 404);
   if (request.method !== 'POST') return json({error: 'Use POST.'}, 405);

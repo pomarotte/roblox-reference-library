@@ -134,11 +134,11 @@ Enter the activation time as `YYYY-MM-DDTHH:MM:SSZ`. Once Roblox approves the ch
 
 ### Follow performance in the analytics dashboard
 
-Sign in with an allowed Google email, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. It refreshes every five minutes while the tab is visible and shows each active thumbnail’s impressions, qualified plays, qualified play rate, and progress toward the rotation threshold. Enter the last activation time after changing the active set. The dashboard keeps the Roblox key in tab memory until you disconnect or close or leave the page.
+Sign in with a one-time code sent to an allowed email address, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. It refreshes every five minutes while the tab is visible and shows each active thumbnail’s impressions, qualified plays, qualified play rate, and progress toward the rotation threshold. Enter the last activation time after changing the active set. The dashboard keeps the Roblox key in tab memory until you disconnect or close or leave the page.
 
 To see the watcher’s last check, decisions, and next scheduled check, set `ROLIBRARY_WATCH_REPORT` to a dedicated JSON path before starting `watch` or running `rotate`. Select that file under **Rotation activity**. Select the updated file again after later checks. The activity report contains thumbnail IDs and status messages.
 
-See [dashboard deployment](cloud/README.md#private-thumbnail-analytics-dashboard) for the website owner’s one-time Google and Cloudflare setup.
+See [dashboard deployment](cloud/README.md#private-thumbnail-analytics-dashboard) for the website owner’s one-time Cloudflare setup.
 
 ## Find similar
 

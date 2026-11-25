@@ -34,15 +34,15 @@ The generator’s game-link import uses a read-only Cloudflare Worker because Ro
 
 ## Private thumbnail analytics dashboard
 
-1. In Cloudflare Zero Trust, [add Google as an identity provider](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/google/). Use a Google Cloud OAuth client and configure the redirect URI from the guide.
-2. Create a self-hosted Access application covering `analytics.rolibrary.win`, select Google as its login method, and add an Allow policy for the creator emails that should have access. Record the application’s Audience (AUD) tag. [Cloudflare Access setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
+1. In Cloudflare Zero Trust, enable the [One-time PIN identity provider](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/). Cloudflare sends a sign-in code to the viewer’s authorized email address.
+2. Create a self-hosted Access application covering `analytics.rolibrary.win`, select One-time PIN as its login method, and add an Allow policy for the exact creator emails that should have access. Record the application’s Audience (AUD) tag. [Cloudflare Access setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
 3. From the repository root, deploy using the audience tag. The Worker requires the matching authenticated Cloudflare Access context even if the URL is reached directly.
 
    ```sh
    npx wrangler deploy --config cloud/wrangler.dashboard.toml --var ACCESS_AUDIENCE:YOUR_ACCESS_AUD
    ```
 
-4. Open `https://analytics.rolibrary.win/` and verify that an allowed Google account can sign in. Connect a Roblox Universe ID with a game-scoped Open Cloud key granting `universe.thumbnail:read` and `universe.analytics:read`. Keep the separate write-scoped rotation key in the watcher environment. [Roblox Open Cloud key setup](https://create.roblox.com/docs/cloud/auth/api-keys)
+4. Open `https://analytics.rolibrary.win/` and verify that an allowed email can sign in. Connect a Roblox Universe ID with a game-scoped Open Cloud key granting `universe.thumbnail:read` and `universe.analytics:read`. Keep the separate write-scoped rotation key in the watcher environment. [Roblox Open Cloud key setup](https://create.roblox.com/docs/cloud/auth/api-keys)
 5. After verifying the protected dashboard, set the repository Actions variable `ROLIBRARY_ANALYTICS_ENABLED` to `true` and rebuild Pages to link it from **Roblox Home thumbnail test**.
 
 Run `node cloud/test-dashboard.mjs` from the repository root for the mocked Access and Roblox integration checks.
