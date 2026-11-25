@@ -21,6 +21,8 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      ROLIBRARY_ANALYTICS_ENABLED: ${{ vars.ROLIBRARY_ANALYTICS_ENABLED }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -36,6 +38,8 @@ jobs:
       - run: node web/test-collections.mjs
       - run: node web/test-thumbnail-generator.cjs
       - run: node cloud/test-reference-worker.mjs
+      - run: node cloud/test-home-thumbnails.mjs
+      - run: node cloud/test-dashboard.mjs
       - run: node test-cloud.cjs
         working-directory: cloud
       - run: python -m unittest test_web

@@ -94,6 +94,52 @@ Open the **Image generator** tab on the right edge of Explorer. Use **Full scree
 
 To refer to a specific character or object, choose **Add box** on a selected reference, drag around the subject, and save a name. Type `@` in the description to insert a box mention. For example, `@[Red Knight] rides ahead while @[Blue Wizard] casts a spell.`
 
+Use **Edit thumbnail** to revise the current image. The arrows below the preview browse generations and edits from this page session. Edits start from the selected version, and each version retains its own download and upscale.
+
+## Test thumbnails on Roblox Home
+
+1. Open an archived thumbnail for your game and click **Draft Home thumbnails**. RoLibrary fills in the Universe ID and looks for up to two references from different similar games. You can also open **Roblox Home thumbnail test** in the generator and enter a Universe ID directly.
+2. Describe your game, upload assets, and click **Generate 3 variants**. RoLibrary drafts all three at 960 × 540. Use the history arrows to review them and click **AI upscale to 1920 × 1080** on the ones you want to test. Review each upscaled image, click **Approve this version**, and download it from the approved-version list.
+3. Set `ROBLOX_API_KEY` in your terminal environment. Scope it to the game and grant `universe.thumbnail:read` and `universe.thumbnail:write`. Add `universe.analytics:read` for ranking. From the repository, use Node.js 20+ to upload your approved files and check their moderation status.
+
+   ```sh
+   node cloud/home-thumbnails.mjs UNIVERSE_ID upload PATH_TO_APPROVED_FILE_1 PATH_TO_APPROVED_FILE_2
+   node cloud/home-thumbnails.mjs UNIVERSE_ID status
+   ```
+
+4. After Roblox approves them, activate 2–5 Home thumbnail IDs. Include any existing thumbnail you want to keep in the active set. Roblox serves variants automatically. The command updates an existing configuration in place so its statistics are retained.
+
+   ```sh
+   node cloud/home-thumbnails.mjs UNIVERSE_ID activate HOME_ID_1 HOME_ID_2
+   ```
+
+5. After collecting traffic, rank variants using a full UTC start date on which every variant was active. The command compares shared reporting days and requires 1,000 impressions per variant by default. Match the leading Home ID to the filename printed during upload, load that image under **Roblox Home thumbnail test**, and generate variations from it for the next round. You approve and activate each new round.
+
+   ```sh
+   node cloud/home-thumbnails.mjs UNIVERSE_ID rank YYYY-MM-DD
+   ```
+
+The rank command reports observed qualified plays per impression across the available days. Roblox allocates exposure by audience segment, so the aggregate ranking is a guide for iteration. [Roblox Home personalization](https://create.roblox.com/docs/production/publishing/thumbnails) · [Open Cloud thumbnail management](https://create.roblox.com/docs/cloud/guides/experience-icons-and-thumbnails) · [Thumbnail analytics metrics](https://create.roblox.com/docs/cloud/guides/analytics/metrics#thumbnails)
+
+### Rotate an approved challenger into Home
+
+Approve and upload a challenger, then pass its Home thumbnail ID and the UTC time when you last changed the active set. Run a one-time review with `rotate`, or leave `watch` running to check immediately and every 12 hours. Pass `24` to check once a day. The watcher exits after the challenger becomes active.
+
+```sh
+node cloud/home-thumbnails.mjs UNIVERSE_ID rotate ACTIVATED_AT_UTC CHALLENGER_HOME_ID
+node cloud/home-thumbnails.mjs UNIVERSE_ID watch ACTIVATED_AT_UTC CHALLENGER_HOME_ID 12
+```
+
+Enter the activation time as `YYYY-MM-DDTHH:MM:SSZ`. Once Roblox approves the challenger, an open slot can be filled immediately. When all five slots are full, rotation waits for at least 10,000 impressions per active thumbnail across shared, completed reporting hours. It keeps the leader by qualified plays per impression and replaces the lowest performer with the challenger. A tie across the entire set waits for more data. The active configuration is updated in place. Record the new activation time for the next challenger.
+
+### Follow performance in the analytics dashboard
+
+Sign in with an allowed Google email, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. It refreshes every five minutes while the tab is visible and shows each active thumbnail’s impressions, qualified plays, qualified play rate, and progress toward the rotation threshold. Enter the last activation time after changing the active set. The dashboard keeps the Roblox key in tab memory until you disconnect or close or leave the page.
+
+To see the watcher’s last check, decisions, and next scheduled check, set `ROLIBRARY_WATCH_REPORT` to a dedicated JSON path before starting `watch` or running `rotate`. Select that file under **Rotation activity**. Select the updated file again after later checks. The activity report contains thumbnail IDs and status messages.
+
+See [dashboard deployment](cloud/README.md#private-thumbnail-analytics-dashboard) for the website owner’s one-time Google and Cloudflare setup.
+
 ## Find similar
 
 Open a card, choose an image, and click **Find similar**. Choose **Visual appearance**, **Game type**,

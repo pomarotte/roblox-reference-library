@@ -95,7 +95,7 @@ const gameImage = 'https://tr.rbxcdn.com/test/768/432/Image/Webp/noFilter';
 const lookupRequests = [];
 let failGeneration = false;
 let exportedUrl = 0;
-const context = {document, window, Worker, IntersectionObserver, ResizeObserver: class {observe() {}}, Option, FileReader: Reader, Uint8Array, Blob, atob, URL: class extends URL {
+const context = {document, window, Worker, IntersectionObserver, ResizeObserver: class {observe() {}}, Option, FileReader: Reader, Uint8Array, Blob, atob, URLSearchParams, URL: class extends URL {
   static createObjectURL(value) { return value instanceof Blob ? `blob:result-${++exportedUrl}` : 'blob:result'; }
   static revokeObjectURL() {}
 }, createImageBitmap: async file => ({
@@ -368,8 +368,25 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.notEqual(upscaled.href, original);
   assert.equal(upscale.hidden, true);
   assert.equal(element('thumbnail-status').textContent, 'Upscaled thumbnail ready · 1920 × 1080');
+  const previous = element('thumbnail-previous'), next = element('thumbnail-next');
+  const upscaledUrl = upscaled.href;
+  assert.equal(next.disabled, true);
+  previous.handlers.click();
+  assert.equal(element('thumbnail-result').src, editedDownload);
+  assert.equal(element('thumbnail-download').href, editedDownload);
+  assert.equal(upscaled.hidden, true);
+  next.handlers.click();
+  assert.equal(upscaled.href, upscaledUrl);
+  assert.equal(upscaled.hidden, false);
+  previous.handlers.click();
   editInput.value = 'Try a brighter color';
   await submitEdit();
+  assert.equal(atob(calls.at(-1).contents[0].parts[1].inlineData.data), 'output-5');
+  assert.equal(element('thumbnail-version').textContent, 'Version 7 of 7 · 960 × 540');
+  previous.handlers.click();
+  assert.equal(element('thumbnail-download').href, original);
+  assert.equal(upscaled.href, upscaledUrl);
+  next.handlers.click();
   assert.equal(upscaled.hidden, true);
   assert.equal(upscale.hidden, false);
   for (const row of element('thumbnail-references').children) row.children[0].children[1].handlers.click();
@@ -433,5 +450,50 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   for (let id = 20; id < 26; id++) window.galleryGenerator.addReference({id});
   assert.equal(element('thumbnail-count').textContent, '(5)');
   assert.match(element('thumbnail-gallery-status').textContent, /limit is five/);
-  console.log('Generator drawer, full screen, named box mentions and crops, reference limits, PNG export, edits, and AI upscale passed.');
+  for (const row of element('thumbnail-references').children) row.children[0].children[1].handlers.click();
+  window.galleryHost.api = path => {
+    assert.match(path, /similarity=both&seed_image=50/);
+    return {items: [{id: 51, image_id: 12}, {id: 51, image_id: 13}]};
+  };
+  await window.galleryGenerator.startTest({id: 8, name: 'Racing', genre: 'Driving'}, 50);
+  assert.equal(element('thumbnail-count').textContent, '(1)');
+  assert.match(element('thumbnail-test-status').textContent, /Added 1 similar-game/);
+  concept.value = 'Show racers drifting on the city track.';
+  element('thumbnail-resolution').value = '2K';
+  const submitTest = id => element('thumbnail-form').handlers.submit({preventDefault() {}, submitter: element(id)});
+  const beforeBatch = calls.length;
+  await submitTest('thumbnail-test-draft');
+  const batch = calls.slice(beforeBatch);
+  assert.equal(batch.length, 3);
+  assert.equal(new Set(batch.map(request => request.contents[0].parts.at(-1).text)).size, 3);
+  assert.ok(batch.every(request => request.generationConfig.imageConfig.imageSize === '1K'));
+  const approve = element('thumbnail-test-approve'), list = element('thumbnail-test-approved');
+  assert.equal(list.hidden, true);
+  assert.equal(approve.disabled, true);
+  await approve.handlers.click();
+  assert.equal(list.hidden, true);
+  const upscalesBeforeBatchReview = upscaleInputs.length;
+  await upscale.handlers.click();
+  assert.equal(element('thumbnail-result').src, upscaled.href);
+  assert.equal(approve.disabled, false);
+  await approve.handlers.click();
+  previous.handlers.click();
+  assert.equal(approve.disabled, true);
+  await upscale.handlers.click();
+  await approve.handlers.click();
+  assert.equal(upscaleInputs.length - upscalesBeforeBatchReview, 2);
+  assert.equal(calls.length - beforeBatch, 3);
+  assert.equal(list.children.length, 2);
+  assert.ok(list.children.every(item => /^roblox-home-8-[a-z0-9]+-v\d+\.png$/.test(item.children[0].download)));
+  const approvedVersion = list.children[0].children[0].href;
+  assert.equal(approvedVersion, upscaled.href);
+  assert.notEqual(approvedVersion, element('thumbnail-download').href);
+  const beforeIteration = calls.length;
+  await submitTest('thumbnail-test-iterate');
+  assert.equal(calls.length - beforeIteration, 3);
+  const seeds = calls.slice(beforeIteration).map(request => request.contents[0].parts[1].inlineData.data);
+  assert.deepEqual(seeds.map(atob), ['upscaled', 'upscaled', 'upscaled']);
+  assert.ok(calls.slice(beforeIteration).every(request => request.generationConfig.imageConfig.imageSize === '1K'));
+  assert.equal(list.children.length, 2);
+  console.log('Generator references, export, edits, version history, Home test drafts, approvals, and iteration passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

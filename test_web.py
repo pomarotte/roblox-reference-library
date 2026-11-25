@@ -51,6 +51,9 @@ class WebExportTests(unittest.TestCase):
             self.assertIn('id="thumbnail-game-url"', generator_html)
             self.assertIn('id="thumbnail-allow-text"', generator_html)
             self.assertIn('id="thumbnail-upscale"', generator_html)
+            self.assertIn('id="thumbnail-history"', generator_html)
+            self.assertIn('id="thumbnail-test-draft"', generator_html)
+            self.assertIn('id="viewer-thumbnail-test"', html)
             self.assertIn('download="roblox-thumbnail-1920x1080.png"', generator_html)
             self.assertIn('https://references.rolibrary.win', generator_html)
             self.assertNotIn('BMC-Widget', generator_html)
@@ -83,9 +86,10 @@ class WebExportTests(unittest.TestCase):
             self.assertEqual(len(list(output.glob('collections.*.js'))),1)
             cloud_output = root / 'cloud'
             for commit in ('1' * 40, '2' * 40):
-                with patch.dict('os.environ', GITHUB_SHA=commit):
+                with patch.dict('os.environ', GITHUB_SHA=commit, ROLIBRARY_ANALYTICS_ENABLED='true'):
                     build_cloud(cloud_output, cache=root)
                 cloud_html = (cloud_output / 'index.html').read_text(encoding='utf-8')
+                self.assertIn('href="https://analytics.rolibrary.win/"', cloud_html)
                 self.assertIn('id="open-charts" class="secondary" type="button" aria-pressed="false">Top charts</button>', cloud_html)
                 self.assertIn('id="chart-controls" class="chart-controls" hidden', cloud_html)
                 self.assertIn(f'id="last-updated" hidden></span><span id="site-version">Site version {commit[:12]}</span>', cloud_html)

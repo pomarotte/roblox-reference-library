@@ -14,7 +14,7 @@
     'Logo': 'place the complete referenced logo, preserving its graphic mark and any lettering, spelling, and typography that are part of the logo, even when other text is disabled',
     'Text style': 'when text is enabled, use the typeface, weight, color, outline and effects as inspiration for the requested wording'
   };
-  let result, resultUrl, nextImageNumber = 0, collections = [];
+  let nextImageNumber = 0, collections = [];
   const host = window.galleryHost;
   const keyInput = $('thumbnail-key');
   const keyStorage = 'rolibrary-gemini-api-key';
@@ -490,6 +490,36 @@
   }
 
   window.galleryGenerator = {
+    async startTest(game, seedImage) {
+      openGenerator(true);
+      $('thumbnail-test').open = true;
+      if (generate.disabled) return;
+      testUniverse.value = String(game.id);
+      testUniverseChanged();
+      const lookup = ++similarLookup;
+      testStatus.textContent = `Finding references similar to ${game.name || 'this game'}…`;
+      try {
+        const query = new URLSearchParams({
+          kind: 'thumbs', similarity: game.genre && game.genre !== 'Unknown' ? 'both' : 'visual',
+          seed_image: seedImage, limit: 120
+        });
+        const {items} = await host.api(`/api/library?${query}`);
+        if (lookup !== similarLookup || generate.disabled) return;
+        const games = new Set([game.id]);
+        for (const item of items) {
+          if (games.size === 3 || references.size >= 5) break;
+          if (games.has(item.id) || references.has(item.image_id)) continue;
+          games.add(item.id);
+          addReference(item.image_id, {tags: new Set(['Visual style'])});
+        }
+        update();
+        testStatus.textContent = games.size > 1
+          ? `Added ${games.size - 1} similar-game reference(s) for ${game.name || 'this game'}.`
+          : 'Add references from the gallery or upload your game assets.';
+      } catch {
+        if (lookup === similarLookup) testStatus.textContent = 'Similar thumbnails are unavailable. Add references manually.';
+      }
+    },
     addReference({id, url}, focus = false) {
       openGenerator(focus);
       const status = $('thumbnail-gallery-status');
@@ -621,7 +651,7 @@
     context.putImageData(image, 0, 0);
   }
 
-  async function exportThumbnail(blob, width, height, targetBrightness) {
+  async function exportThumbnail(blob, width, height, targetBrightness, mimeType = 'image/png', quality) {
     const bitmap = await createImageBitmap(blob);
     try {
       const canvas = document.createElement('canvas');
@@ -635,7 +665,7 @@
       return await new Promise((resolve, reject) => canvas.toBlob(file => {
         if (file) resolve(file);
         else reject(new Error('Could not prepare the thumbnail for download.'));
-      }, 'image/png'));
+      }, mimeType, quality));
     } finally { bitmap.close(); }
   }
 
@@ -775,12 +805,137 @@
   const editButton = $('thumbnail-edit'), editFields = $('thumbnail-edit-fields');
   const editInstructions = $('thumbnail-edit-instructions');
   const upscaleButton = $('thumbnail-upscale'), upscaledDownload = $('thumbnail-upscaled-download');
+  const history = [];
+  const previous = $('thumbnail-previous'), next = $('thumbnail-next');
   const status = $('thumbnail-status');
-  let upscaleWorker, upscaledUrl;
+  const testUniverse = $('thumbnail-test-universe'), testStatus = $('thumbnail-test-status');
+  const draft = $('thumbnail-test-draft'), iterate = $('thumbnail-test-iterate');
+  const winnerInput = $('thumbnail-test-winner');
+  const approve = $('thumbnail-test-approve'), approvedList = $('thumbnail-test-approved');
+  const sessionId = Date.now().toString(36);
+  let upscaleWorker, version = -1, similarLookup = 0;
 
   function setBusy(busy) {
     generate.disabled = applyEdit.disabled = upscaleButton.disabled = busy;
+    draft.disabled = iterate.disabled = testUniverse.disabled = winnerInput.disabled = busy;
+    const selected = history[version];
+    approve.disabled = busy || needsUpscale(selected);
+    previous.disabled = busy || version <= 0;
+    next.disabled = busy || version >= history.length - 1;
   }
+
+  function needsUpscale(entry) {
+    return Boolean(entry?.draft && entry.width === 960 && !entry.upscaledUrl);
+  }
+
+  function showVersion(index) {
+    version = index;
+    const {url, width, height, upscaledUrl, draft} = history[index];
+    const previewUpscale = draft && upscaledUrl;
+    $('thumbnail-result').src = previewUpscale || url;
+    $('thumbnail-result').hidden = false;
+    $('thumbnail-download').href = url;
+    $('thumbnail-download').hidden = false;
+    $('thumbnail-history').hidden = history.length < 2;
+    const size = previewUpscale ? '1920 × 1080' : `${width} × ${height}`;
+    $('thumbnail-version').textContent = `Version ${index + 1} of ${history.length} · ${size}`;
+    upscaledDownload.hidden = !upscaledUrl;
+    if (upscaledUrl) upscaledDownload.href = upscaledUrl;
+    else upscaledDownload.removeAttribute('href');
+    upscaleButton.hidden = width !== 960 || Boolean(upscaledUrl);
+    editButton.hidden = false;
+    renderApprovals();
+    setBusy(generate.disabled);
+  }
+
+  function renderApprovals() {
+    const universe = testUniverse.value.trim();
+    const selected = history[version];
+    const usable = selected && /^[1-9]\d{0,19}$/.test(universe) &&
+      (!selected.universe || selected.universe === universe) && (!selected.approvedFor || selected.approvedFor === universe);
+    const approved = selected?.approvedFor === universe;
+    const entries = history.filter(entry => entry.approvedFor === universe);
+    iterate.hidden = approve.hidden = !usable;
+    approve.textContent = approved ? 'Remove approval' : needsUpscale(selected) ? 'Upscale this draft to approve' : 'Approve this version';
+    approve.setAttribute('aria-pressed', String(approved));
+    approvedList.hidden = !entries.length;
+    approvedList.replaceChildren(...entries.map(entry => {
+      const item = document.createElement('li'), link = document.createElement('a');
+      const number = history.indexOf(entry) + 1;
+      link.href = entry.approval.url;
+      link.download = `roblox-home-${universe}-${sessionId}-v${number}.${entry.approval.extension}`;
+      link.textContent = `Download approved version ${number}`;
+      item.append(link);
+      return item;
+    }));
+  }
+
+  function testUniverseChanged() {
+    testStatus.textContent = '';
+    renderApprovals();
+  }
+  testUniverse.addEventListener('input', () => {
+    similarLookup++;
+    testUniverseChanged();
+  });
+  winnerInput.addEventListener('change', async () => {
+    const file = winnerInput.files[0], universe = testUniverse.value.trim();
+    winnerInput.value = '';
+    if (!file || generate.disabled) return;
+    if (!/^[1-9]\d{0,19}$/.test(universe) || !['image/png', 'image/jpeg'].includes(file.type) || !file.size || file.size >= 3_000_000) {
+      testStatus.textContent = 'Enter the Universe ID and choose a PNG or JPEG under 3 MB.';
+      return;
+    }
+    setBusy(true);
+    try {
+      const bitmap = await createImageBitmap(file);
+      const {width, height} = bitmap;
+      bitmap.close();
+      if (width * 9 !== height * 16 || width > 1920) throw new Error('Choose a 16:9 thumbnail up to 1920 × 1080.');
+      history.push({blob: file, url: URL.createObjectURL(file), width, height, universe});
+      showVersion(history.length - 1);
+      testStatus.textContent = 'Thumbnail loaded. Generate variations from this image.';
+    } catch (error) {
+      testStatus.textContent = error.message;
+    } finally { setBusy(false); }
+  });
+  approve.addEventListener('click', async () => {
+    const universe = testUniverse.value.trim(), entry = history[version];
+    if (approve.hidden || approve.disabled) return;
+    if (entry.approvedFor !== universe && history.filter(item => item.approvedFor === universe).length >= 5) {
+      testStatus.textContent = 'Remove an approval before selecting another version. Roblox allows up to five active thumbnails.';
+      return;
+    }
+    if (entry.approvedFor === universe) {
+      if (entry.approval.compressed) URL.revokeObjectURL(entry.approval.url);
+      entry.approval = entry.approvedFor = undefined;
+      testUniverseChanged();
+      return;
+    }
+    setBusy(true);
+    try {
+      const blob = entry.upscaledBlob || entry.blob;
+      if (blob.size >= 3_000_000) {
+        const [width, height] = entry.upscaledBlob ? [1920, 1080] : [entry.width, entry.height];
+        const compressed = await exportThumbnail(blob, width, height, undefined, 'image/jpeg', 0.8);
+        if (compressed.size >= 3_000_000) throw new Error('This thumbnail exceeds the Roblox upload size limit.');
+        entry.approval = {url: URL.createObjectURL(compressed), extension: 'jpg', compressed: true};
+      } else {
+        entry.approval = {url: entry.upscaledUrl || entry.url, extension: blob.type === 'image/jpeg' ? 'jpg' : 'png'};
+      }
+      entry.approvedFor = universe;
+      testUniverseChanged();
+    } catch (error) {
+      testStatus.textContent = error.message;
+    } finally { setBusy(false); }
+  });
+
+  previous.addEventListener('click', () => {
+    if (!previous.disabled) { showVersion(version - 1); status.textContent = ''; }
+  });
+  next.addEventListener('click', () => {
+    if (!next.disabled) { showVersion(version + 1); status.textContent = ''; }
+  });
 
   function upscaleThumbnail(image) {
     upscaleWorker ||= new Worker('./thumbnail-upscaler.js');
@@ -796,14 +951,14 @@
   }
 
   upscaleButton.addEventListener('click', async () => {
-    if (!result || generate.disabled || upscaleButton.hidden) return;
+    const selected = history[version];
+    if (!selected || generate.disabled || upscaleButton.hidden) return;
     setBusy(true);
     status.textContent = 'Loading the upscaling model…';
     try {
-      upscaledUrl = URL.createObjectURL(await upscaleThumbnail(result));
-      upscaledDownload.href = upscaledUrl;
-      upscaledDownload.hidden = false;
-      upscaleButton.hidden = true;
+      selected.upscaledBlob = await upscaleThumbnail(selected.blob);
+      selected.upscaledUrl = URL.createObjectURL(selected.upscaledBlob);
+      showVersion(version);
       upscaledDownload.focus();
       status.textContent = 'Upscaled thumbnail ready · 1920 × 1080';
     } catch {
@@ -818,55 +973,82 @@
     editButton.setAttribute('aria-expanded', String(!editFields.hidden));
     if (!editFields.hidden) editInstructions.focus();
   });
+
+  async function generateImage(key, parts, imageSize, width, height, targetBrightness, universe, isDraft) {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
+      body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize}}})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || `Google returned error ${response.status}.`);
+    const image = (data.candidates || []).flatMap(candidate => candidate.content?.parts || [])
+      .find(part => !part.thought && part.inlineData?.data)?.inlineData;
+    if (!image) throw new Error('Google did not return an image. Try adjusting your description or references.');
+    const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
+    const blob = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height, targetBrightness);
+    history.push({blob, url: URL.createObjectURL(blob), width, height, universe, draft: isDraft});
+    showVersion(history.length - 1);
+  }
+
   $('thumbnail-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (generate.disabled) return;
     const editing = event.submitter === applyEdit;
+    const iterating = event.submitter === iterate;
+    const batch = iterating || event.submitter === draft;
+    const selected = history[version];
+    const result = (iterating || selected?.draft ? selected?.upscaledBlob : undefined) || selected?.blob;
+    const universe = batch ? testUniverse.value.trim() : editing ? selected?.universe : undefined;
     const key = keyInput.value.trim();
     const concept = conceptInput.value.trim();
     const changes = editInstructions.value.trim();
-    const imageSize = $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
+    const isDraft = batch || (editing && selected?.draft);
+    const imageSize = isDraft || $('thumbnail-resolution').value === '1K' ? '1K' : '2K';
     const [width, height] = imageSize === '1K' ? [960, 540] : [1920, 1080];
     if (!key || (editing && (!result || !changes))) {
       status.textContent = editing ? 'Enter an API key and describe what to change.' : 'Enter an API key.';
       return;
     }
+    if (batch && (!/^[1-9]\d{0,19}$/.test(universe) ||
+        (iterating ? iterate.hidden : !concept))) {
+      testStatus.textContent = 'Enter the Universe ID and describe your game before drafting variants.';
+      return;
+    }
     setBusy(true);
-    status.textContent = editing ? 'Editing thumbnail…' : 'Generating thumbnail…';
+    status.textContent = batch ? 'Generating variants…' : editing ? 'Editing thumbnail…' : 'Generating thumbnail…';
     try {
-      const {parts, targetBrightness} = editing ? {parts: [
+      const instructions = iterating ? 'Preserve the recognizable subject and core visual style. Vary the framing, camera, or lighting as requested below.' : changes;
+      const {parts, targetBrightness} = editing || iterating ? {parts: [
         {text: 'Edit this Roblox thumbnail according to the request below. Preserve the composition, subjects, style, and existing lettering except where the request calls for changes. Return the edited image only.'},
         {inlineData: {mimeType: result.type, data: (await asDataUrl(result)).split(',')[1]}},
-        {text: allowText.checked ? changes : `${changes}\nDo not add new lettering outside logos.`}
+        {text: allowText.checked ? instructions : `${instructions}\nDo not add new lettering outside logos.`}
       ]} : await generationParts(concept, allowText.checked, $('thumbnail-wording').value.trim());
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': key},
-        body: JSON.stringify({contents: [{parts}], generationConfig: {responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize}}})
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.message || `Google returned error ${response.status}.`);
-      const image = (data.candidates || []).flatMap(candidate => candidate.content?.parts || [])
-        .find(part => !part.thought && part.inlineData?.data)?.inlineData;
-      if (!image) throw new Error('Google did not return an image. Try adjusting your description or references.');
-      const bytes = Uint8Array.from(atob(image.data), c => c.charCodeAt(0));
-      const exported = await exportThumbnail(new Blob([bytes], {type: image.mimeType || 'image/png'}), width, height, targetBrightness);
-      if (resultUrl) URL.revokeObjectURL(resultUrl);
-      result = exported;
-      resultUrl = URL.createObjectURL(result);
-      $('thumbnail-result').src = resultUrl; $('thumbnail-result').hidden = false;
-      $('thumbnail-download').href = resultUrl; $('thumbnail-download').hidden = false;
-      if (upscaledUrl) URL.revokeObjectURL(upscaledUrl);
-      upscaledUrl = undefined;
-      upscaledDownload.hidden = true;
-      upscaleButton.hidden = imageSize !== '1K';
-      editButton.hidden = false;
+      if (batch) {
+        const directions = [
+          'Focus on the main subject with stronger framing and a clearer silhouette.',
+          'Show the gameplay action through a more dynamic camera angle.',
+          'Make the setting more readable with distinct lighting and depth.'
+        ];
+        for (const [index, direction] of directions.entries()) {
+          testStatus.textContent = `Generating variant ${index + 1} of 3…`;
+          await generateImage(key, [...parts, {text: `Create a distinct thumbnail for the described game. ${direction} Show only characters, branding and gameplay appropriate to this game. Use other games’ references for visual inspiration only.`}],
+            imageSize, width, height, targetBrightness, universe, isDraft);
+        }
+        testStatus.textContent = 'Use the history arrows to review each draft. Upscale the ones you want to approve.';
+      } else {
+        await generateImage(key, parts, imageSize, width, height, targetBrightness, universe, isDraft);
+      }
       editInstructions.value = '';
       if (!editing) {
         editFields.hidden = true;
         editButton.setAttribute('aria-expanded', 'false');
       }
-      status.textContent = `${editing ? 'Edit ready' : 'Thumbnail ready'} · ${width} × ${height}`;
-    } catch (error) { status.textContent = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message; }
+      status.textContent = `${batch ? '3 variants ready' : editing ? 'Edit ready' : 'Thumbnail ready'} · ${width} × ${height}`;
+    } catch (error) {
+      const message = error instanceof TypeError ? 'Could not reach the generation service. Check your connection and try again.' : error.message;
+      if (batch) testStatus.textContent = message;
+      status.textContent = message;
+    }
     finally { setBusy(false); }
   });
 })();

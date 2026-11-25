@@ -38,8 +38,15 @@ body:has(#thumbnail-panel[data-fullscreen]) #thumbnail-open { visibility: hidden
 .thumbnail-reference { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .thumbnail-reference span { min-width: 0; overflow-wrap: anywhere; }
 #thumbnail-result { max-width: 100%; border-radius: 10px; }
+#thumbnail-history { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#thumbnail-version { color: var(--muted); font-size: 13px; text-align: center; }
 #thumbnail-download { text-align: center; }
 #thumbnail-edit-fields { display: grid; gap: 8px; }
+#thumbnail-test { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+#thumbnail-test summary { cursor: pointer; }
+#thumbnail-test[open] summary { margin-bottom: 10px; }
+#thumbnail-test label, #thumbnail-test small, #thumbnail-test button { display: block; margin-top: 8px; }
+#thumbnail-test-status:empty { display: none; }
 
 .thumbnail-collection-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr)); gap: 8px; min-width: 0; max-width: 100%; max-height: 260px; overflow: auto; padding: 4px; }
 .thumbnail-collection-images:empty { display: none; }

@@ -12,6 +12,7 @@ const imageLists = new Map();
 const saved = window.galleryHost?.saved;
 const generator = window.galleryGenerator;
 const viewerReference = $('viewer-add-reference');
+const viewerThumbnailTest = $('viewer-thumbnail-test');
 
 async function api(path, options = {}) {
   if (window.galleryHost) return window.galleryHost.api(path, options);
@@ -411,6 +412,7 @@ function showImage(index) {
   }
   $('find-similar').hidden = !archived;
   if (viewerReference) viewerReference.hidden = !generator || image?.kind !== 'thumbs';
+  if (viewerThumbnailTest) viewerThumbnailTest.hidden = !generator || !archived || image.kind !== 'thumbs';
   $('open-image').hidden = $('download-image').hidden = $('preview').hidden = !image;
   $('preview-unavailable').hidden = Boolean(image);
   if (image) {
@@ -520,6 +522,11 @@ $('find-similar').addEventListener('click', () => {
   $('viewer').close();
   load(true);
   window.scrollTo({top: 0});
+});
+viewerThumbnailTest?.addEventListener('click', () => {
+  lastTrigger = null;
+  $('viewer').close();
+  generator.startTest(selectedGame, selectedImages[imageIndex].id);
 });
 $('upload-search')?.addEventListener('click', () => $('upload-input').click());
 $('upload-input')?.addEventListener('change', async event => {

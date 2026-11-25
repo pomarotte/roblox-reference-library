@@ -1,0 +1,12 @@
+name = "rolibrary-thumbnail-dashboard"
+main = "dashboard-worker.mjs"
+compatibility_date = "2026-11-24"
+workers_dev = false
+preview_urls = false
+
+routes = [{ pattern = "analytics.rolibrary.win", custom_domain = true }]
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.css", "**/*.client.js"]
+fallthrough = false

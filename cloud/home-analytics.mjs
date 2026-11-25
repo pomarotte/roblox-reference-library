@@ -1,0 +1,83 @@
+export const hour = 3_600_000;
+export const rotationMinimum = 10_000;
+
+export function reportingWindow(time, now = Date.now()) {
+  const start = new Date(Math.ceil(Date.parse(time) / hour) * hour);
+  const end = new Date(Math.floor(now / hour) * hour);
+  if (!Number.isFinite(+start) || Date.parse(time) > now || now - Date.parse(time) >= 29 * 24 * hour) {
+    throw new Error('Enter an activation time within the past 29 days.');
+  }
+  return {start, end};
+}
+
+export function activeThumbnails(config) {
+  return (config?.thumbnails ?? []).filter(item => item.personalizedThumbnailStatus === 'Active');
+}
+
+export function homeAnalytics(universe, key) {
+  const thumbnails = `/thumbnail-personalization-api/v1/universes/${universe}`;
+  const analytics = `/analytics-query-api/v1/universes/${universe}`;
+
+  async function request(path, {body, json} = {}) {
+    const headers = {'x-api-key': key};
+    if (json) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(json);
+    }
+    const response = await fetch(`https://apis.roblox.com${path}`, {
+      method: body ? 'POST' : 'GET', body, headers, redirect: 'error', signal: AbortSignal.timeout(30_000)
+    });
+    if (!response.ok) throw new Error(`Roblox returned HTTP ${response.status} for ${path.split('?')[0]}.`);
+    const content = await response.text();
+    return content && response.headers.get('content-type')?.includes('json') ? JSON.parse(content) : undefined;
+  }
+
+  async function activeConfig() {
+    const {personalizedConfigs} = await request(`${thumbnails}/personalization?status=Active`);
+    if (!Array.isArray(personalizedConfigs) || personalizedConfigs.length > 1) throw new Error('Unexpected active configuration response.');
+    return personalizedConfigs[0];
+  }
+
+  async function thumbnailMetric(metric, startTime, endTime, assetIds, granularity) {
+    let result = await request(`${analytics}/metrics`, {json: {
+      metric, startTime, endTime, granularity, breakdown: ['ThumbnailAsset'],
+      filter: [{dimension: 'ThumbnailAsset', operation: 'In', values: assetIds}]
+    }});
+    for (let attempt = 0; !result.done && attempt < 20; attempt++) {
+      const prefix = `v1/universes/${universe}/operations/metrics/`;
+      if (!result.path?.startsWith(prefix) || !/^[\w-]+$/.test(result.path.slice(prefix.length))) {
+        throw new Error('Unexpected analytics operation path.');
+      }
+      await new Promise(resolve => setTimeout(resolve, 3_000));
+      result = await request(`/analytics-query-api/${result.path}`);
+    }
+    if (!result.done || result.error) throw new Error(`${metric} is unavailable. Check the date range and analytics permission.`);
+    return new Map(result.response.values.map(series => [
+      String(series.breakdowns.find(item => item.dimension === 'ThumbnailAsset')?.value),
+      new Map(series.dataPoints.filter(point => Number.isFinite(point.value) &&
+        point.value >= 0 && (!point.status || point.status === 'Valid')).map(point => [point.time, point.value]))
+    ]));
+  }
+
+  async function scores(candidates, start, end, granularity) {
+    const assetIds = candidates.map(item => String(item.assetId));
+    const [impressions, plays] = await Promise.all(['ThumbnailImpressions', 'ThumbnailQualifiedPlays'].map(metric =>
+      thumbnailMetric(metric, start.toISOString(), end.toISOString(), assetIds, granularity)));
+    const buckets = [...(impressions.get(assetIds[0])?.keys() || [])].filter(time => {
+      const timestamp = Date.parse(time);
+      return timestamp >= +start && timestamp < +end && assetIds.every(id => {
+        const views = impressions.get(id)?.get(time), qualified = plays.get(id)?.get(time);
+        return views > 0 && qualified >= 0 && qualified <= views;
+      });
+    });
+    return candidates.map(variant => {
+      const id = String(variant.assetId);
+      const views = buckets.reduce((sum, time) => sum + impressions.get(id).get(time), 0);
+      const qualifiedPlays = buckets.reduce((sum, time) => sum + plays.get(id).get(time), 0);
+      return {homeId: variant.homepageThumbnailId, assetId: id, impressions: views, qualifiedPlays,
+        qualifiedPlayRate: views ? qualifiedPlays / views : null};
+    }).sort((a, b) => b.qualifiedPlayRate - a.qualifiedPlayRate);
+  }
+
+  return {thumbnails, request, activeConfig, scores};
+}

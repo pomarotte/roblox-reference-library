@@ -4,6 +4,7 @@ from contextlib import closing, contextmanager
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -96,7 +97,12 @@ def build(cache, output, extend=None):
     html = html.replace('Games still waiting for metadata appear when no metadata filters are applied.', 'Choose your dataset folder above to show its saved images.')
     html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.rbxcdn.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com https://references.rolibrary.win https://*.rbxcdn.com https://*.roblox.com; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     html = html.replace('</main>', '<p><a class="secondary" href="https://buymeacoffee.com/winpo1" target="_blank" rel="noopener noreferrer">Support RoLibrary ↗</a></p>\n</main>', 1)
-    html = html.replace('</body>', (HERE / 'web' / 'generator.html').read_text(encoding='utf-8') + '\n</body>', 1)
+    generator = (HERE / 'web' / 'generator.html').read_text(encoding='utf-8')
+    if os.environ.get('ROLIBRARY_ANALYTICS_ENABLED') == 'true':
+        generator = generator.replace('<summary>Roblox Home thumbnail test</summary>',
+            '<summary>Roblox Home thumbnail test</summary>\n  '
+            '<a href="https://analytics.rolibrary.win/" target="_blank" rel="noopener noreferrer">Open thumbnail analytics ↗</a>')
+    html = html.replace('</body>', generator + '\n</body>', 1)
     html = html.replace('<script src="./app.js"', '<script src="./thumbnail-generator.js" defer></script>\n  <script src="./app.js"', 1)
     for original, hashed in assets.items():
         html = html.replace(original, hashed)
