@@ -239,9 +239,10 @@ export async function advanceCampaign(env, owner, game, roblox, save, prompt) {
         await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft));
         draft.stage = 'draft';
         draft.imageReady = true;
-      } catch {
+      } catch (error) {
         draft.stage = 'generationFailed';
-        draft.detail = 'Generation failed. Edit the description or retry this draft.';
+        draft.detail = /^(A thumbnail reference|Gemini generation failed|Could not reach Gemini|The generated image|A game asset is missing|Gemini did not return an image)/.test(error.message)
+          ? error.message : 'Generation failed unexpectedly. Try this draft again.';
       }
       return 0;
     }

@@ -251,23 +251,31 @@ export async function generateDraft(env, universe, item, brief, prompt, index = 
   let encodedBytes = parts.reduce((total, part) => total + (part.inlineData?.data.length || 0), 0);
   for (let offset = 0; offset < count; offset++) {
     const reference = brief.references[(index * count + offset) % brief.references.length];
-    const image = await remoteImage(reference.image);
+    let image;
+    try { image = await remoteImage(reference.image); }
+    catch { throw new Error('A thumbnail reference could not be loaded from Roblox. Remove it or try again later.'); }
     if (encodedBytes + image.data.length > 18_000_000) break;
     encodedBytes += image.data.length;
     parts.push({text: `Composition and lighting inspiration only: ${reference.name}.`},
       {inlineData: image});
   }
-  const response = await checkedFetch(geminiUrl, {
+  let response;
+  try { response = await checkedFetch(geminiUrl, {
     method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': env.AUTOPILOT_GEMINI_KEY},
     body: JSON.stringify({contents: [{parts}], generationConfig: {
       responseModalities: ['IMAGE'], imageConfig: {aspectRatio: '16:9', imageSize: '2K'}
     }})
-  }, 100_000);
+  }, 100_000); } catch (error) {
+    const status = error.message.match(/HTTP (\d{3})/)?.[1];
+    throw new Error(status ? `Gemini generation failed (HTTP ${status}). Check the Gemini API key, billing and quota.`
+      : 'Could not reach Gemini for image generation. Try again later.');
+  }
   const data = await response.json();
   const result = (data.candidates || []).flatMap(candidate => candidate.content?.parts || [])
     .find(part => !part.thought && part.inlineData?.data)?.inlineData;
   if (!result) throw new Error('Gemini did not return an image.');
-  await storeImage(env, universe, item.id, new Blob([bytes(result.data)]).stream(), false, 15_000_000);
+  try { await storeImage(env, universe, item.id, new Blob([bytes(result.data)]).stream(), false, 15_000_000); }
+  catch { throw new Error('The generated image could not be prepared or saved. Try again later.'); }
 }
 
 export function sendReviewEmail(env, owner, universe, game, batch) {
