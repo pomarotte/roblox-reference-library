@@ -92,15 +92,15 @@
               <label class="full-width">What do players do, and what should the thumbnails show?<textarea id="autopilot-description" rows="4" maxlength="1800" required></textarea></label>
               <label class="check-label full-width"><input id="autopilot-allow-text" type="checkbox">Allow text outside reference logos</label>
               <label id="autopilot-wording-field" class="full-width" hidden>Exact text (optional)<input id="autopilot-wording" type="text" maxlength="160" placeholder="Enter the words to show"></label>
-              <div class="actions"><button class="secondary" id="autopilot-find" type="button">Find similar games</button><button type="submit">Save brief</button></div>
+              <div class="actions"><button class="secondary" id="autopilot-find" type="button">Find thumbnail references</button><button type="submit">Save brief</button><span id="autopilot-reference-count" class="muted"></span></div>
               <p class="muted full-width" id="autopilot-reference-status" role="status"></p>
-              <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Similar-game thumbnail references"></div>
+              <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Thumbnail references"></div>
             </form>
             <details class="autopilot-subsection">
-              <summary>Search for a reference game</summary>
+              <summary>Find thumbnails from a specific game</summary>
               <form id="autopilot-manual-reference-form">
                 <label class="full-width">Find a game by name or Roblox link<input id="autopilot-game-search" type="search" maxlength="300" required placeholder="Game name, Roblox link, or Universe ID"></label>
-                <div class="actions"><button id="autopilot-game-search-button" type="submit" class="secondary">Search games</button></div>
+              <div class="actions"><button id="autopilot-game-search-button" type="submit" class="secondary">Search thumbnails</button></div>
                 <p class="muted full-width" id="autopilot-manual-reference-status" role="status"></p>
                 <div class="thumbnail-grid full-width" id="autopilot-manual-reference-list" aria-label="Manual game search results"></div>
               </form>

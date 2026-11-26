@@ -183,7 +183,7 @@ try {
   assert.equal(element('performance').hidden, true);
 
   const openBatch = 'batch-to-review';
-  const savedGame = {universe: '456', name: 'Second game', minimum: 10_000, brief: {description: 'A racing game', assets: [], references: []},
+  const savedGame = {universe: '456', name: 'Second game', minimum: 10_000, referenceLimit: 8, brief: {description: 'A racing game', assets: [], references: []},
     suggestions: [], starting: [], active: [], library: [], batches: [{id: openBatch, phase: 'review', number: 1,
       items: [{id: 'draft-1', label: 'Draft 1', stage: 'draft', imageReady: true}]}]};
   const legacyFetch = browser.fetch;
@@ -255,11 +255,12 @@ try {
   assert.equal(savedGame.minimum, 20_000);
   assert.equal(element('traffic').textContent, '15,000 / 20,000');
   await element('autopilot-find').listeners.click();
-  assert.match(element('autopilot-reference-status').textContent, /Found 1 similar game/);
+  assert.match(element('autopilot-reference-status').textContent, /Found 1 thumbnail/);
+  assert.equal(element('autopilot-reference-count').textContent, '0 of 8 saved');
   assert.equal(element('autopilot-reference-list').children.length, 1);
   element('autopilot-description').value = 'No matches';
   await element('autopilot-find').listeners.click();
-  assert.match(element('autopilot-reference-status').textContent, /No similar games found/);
+  assert.match(element('autopilot-reference-status').textContent, /No thumbnail suggestions found/);
   element('autopilot-description').value = 'Unavailable';
   await element('autopilot-find').listeners.click();
   assert.equal(element('autopilot-reference-status').textContent, 'Catalogue unavailable.');
@@ -268,7 +269,7 @@ try {
   await element('autopilot-manual-reference-form').listeners.submit({preventDefault() {}});
   const manualCard = element('autopilot-manual-reference-list').children[0];
   assert.equal(manualCard.children[0].src, previewUrl(103));
-  await manualCard.children.find(item => item.tagName === 'button').listeners.click();
+  await manualCard.listeners.click();
   assert.equal(savedGame.brief.references[0].id, '852');
   assert.match(element('autopilot-manual-reference-status').textContent, /added to your creative brief/);
   assert.equal(element('autopilot-approve').disabled, true);

@@ -200,8 +200,8 @@
       if (searching) {
         const count = view.suggestions.length;
         feedback.textContent = count
-          ? `Found ${count} ${count === 1 ? 'similar game' : 'similar games'}. Select up to three thumbnails, then click Save brief.`
-          : 'No similar games found. Try including the genre or main gameplay mechanic in your description.';
+          ? `Found ${count} ${count === 1 ? 'thumbnail' : 'thumbnails'}. Select the images you like, then click Save brief.`
+          : 'No thumbnail suggestions found. Try including the main gameplay mechanic in your description.';
       }
       if (manualSearch) feedback.textContent = view.manualSuggestions.length
         ? 'Choose a thumbnail to add it to your brief.' : 'No thumbnails found. Try a different title or paste the game’s Roblox link.';
@@ -238,10 +238,15 @@
     wording.defaultValue = brief.wording || '';
     get('autopilot-wording-field').hidden = !allow.checked;
     briefVersion = fingerprint;
+    get('autopilot-reference-count').textContent = `${brief.references.length} of ${view.referenceLimit} saved`;
     const saved = new Set(brief.references.map(item => item.id));
-    const offered = [...new Map([...brief.references, ...suggestions].map(item => [item.id, item])).values()];
+    const offered = [...new Map([...suggestions, ...brief.references].map(item => [item.image, item])).values()];
     get('autopilot-reference-list').replaceChildren(...offered.map(item => {
-      const label = el('label', '', 'thumbnail-card'), checkbox = el('input');
+      const label = el('label', '', 'thumbnail-card reference-choice'), checkbox = el('input');
+      if (item.reason) {
+        label.title = item.reason;
+        checkbox.setAttribute('aria-description', item.reason);
+      }
       checkbox.type = 'checkbox';
       checkbox.value = item.id;
       checkbox.checked = referenceChoices.get(item.id) ?? saved.has(item.id);
@@ -249,7 +254,6 @@
       const row = el('span', '', 'check-label');
       row.append(checkbox, item.name);
       label.append(preview(item.image, ''), row);
-      if (item.reason) label.append(el('p', item.reason, 'muted'));
       return label;
     }));
     get('autopilot-assets').replaceChildren(...brief.assets.map(asset => {
@@ -278,17 +282,18 @@
 
   function renderManualReferences(view) {
     const results = view.manualSuggestions || [];
-    const selected = view.brief.references.map(item => item.id);
+    const selected = view.brief.references.map(item => item.image);
     const fingerprint = JSON.stringify([results, selected]);
     if (manualVersion === fingerprint) return;
     manualVersion = fingerprint;
     get('autopilot-manual-reference-list').replaceChildren(...results.map(item => {
-      const node = card(item.name, item.image);
-      const added = selected.includes(item.id);
-      const add = button(added ? 'Added' : 'Add thumbnail', () => act('addReference', {id: item.id}));
+      const added = selected.includes(item.image);
+      const add = button('', () => act('addReference', {id: item.id}));
+      add.className = 'thumbnail-card thumbnail-choice secondary';
+      add.setAttribute('aria-pressed', String(added));
       add.disabled = added;
-      node.append(add);
-      return node;
+      add.append(preview(item.image, ''), el('span', item.name, 'muted'), el('span', added ? 'Saved' : 'Add reference', 'thumbnail-choice-status'));
+      return add;
     }));
   }
 

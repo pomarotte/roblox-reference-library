@@ -1,6 +1,6 @@
 import {RobloxApiError, homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
-import {describeDraft, findReferences, imageKey, readJson, searchGameReferences, storageKey, storeImage} from './autopilot-services.mjs';
+import {describeDraft, findReferences, imageKey, readJson, searchGameReferences, storageKey, storeImage, thumbnailReferenceLimit} from './autopilot-services.mjs';
 
 const universePattern = /^[1-9]\d{0,19}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
@@ -60,7 +60,7 @@ function summary(game) {
 
 function publicGame(game) {
   const {swap, ...view} = game;
-  return {...view, minimum: view.minimum ?? rotationMinimum};
+  return {...view, minimum: view.minimum ?? rotationMinimum, referenceLimit: thumbnailReferenceLimit};
 }
 
 async function checkThumbnailConnection(roblox) {
@@ -133,13 +133,17 @@ async function updateGame(request, env, row, game, url, body) {
     if (action === 'references') {
       game.suggestions = await findReferences(env.AUTOPILOT_GEMINI_KEY, row.universe, description);
     } else {
-      requireInput(Array.isArray(body.references) && body.references.length <= 3, 'Choose up to three similar-game references.');
+      requireInput(Array.isArray(body.references) && body.references.length <= thumbnailReferenceLimit,
+        `Choose up to ${thumbnailReferenceLimit} reference thumbnails.`);
       const offered = new Map([...game.brief.references, ...game.suggestions].map(reference => [reference.id, reference]));
-      requireInput(body.references.every(id => offered.has(id)), 'Choose references from the suggested games.');
+      requireInput(body.references.every(id => offered.has(id)), 'Choose from the available thumbnail references.');
       requireInput((body.allowText === undefined || typeof body.allowText === 'boolean') &&
         (body.wording === undefined || typeof body.wording === 'string' && body.wording.length <= 160),
       'Enter up to 160 characters of thumbnail text.');
-      game.brief.references = [...new Set(body.references)].map(id => offered.get(id));
+      game.brief.references = [...new Map(body.references.map(id => {
+        const reference = offered.get(id);
+        return [reference.image, reference];
+      })).values()];
       if (body.allowText !== undefined) {
         game.brief.allowText = body.allowText;
         game.brief.wording = body.allowText ? clean(body.wording, 160) : '';
@@ -153,8 +157,9 @@ async function updateGame(request, env, row, game, url, body) {
   } else if (action === 'addReference') {
     const reference = game.manualSuggestions?.find(item => item.id === body.id);
     requireInput(reference, 'Choose a thumbnail from the current search results.');
-    if (!game.brief.references.some(item => item.id === reference.id)) {
-      requireInput(game.brief.references.length < 3, 'You can save up to three references. Uncheck one and save the brief to make room.');
+    if (!game.brief.references.some(item => item.image === reference.image)) {
+      requireInput(game.brief.references.length < thumbnailReferenceLimit,
+        `You can save up to ${thumbnailReferenceLimit} thumbnails. Uncheck one and save the brief to make room.`);
       game.brief.references.push(reference);
     }
   } else if (action === 'removeAsset') {

@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {serveDashboard} from './dashboard-api.mjs';
 import {runAutopilot} from './autopilot-api.mjs';
 import {planSwap} from './autopilot-campaign.mjs';
+import {generateDraft} from './autopilot-services.mjs';
 
 const sqlite = new DatabaseSync(':memory:');
 sqlite.exec(await readFile(new URL('./dashboard-migrations/0002_autopilot.sql', import.meta.url), 'utf8'));
@@ -71,10 +72,13 @@ for (const [index, id] of active.entries()) {
     rate: .2 - index * .02});
 }
 const emails = [], generations = [], submissions = [], swaps = [];
+const referenceDownloads = [];
 const operations = new Map();
 let moderated = false, enoughTraffic = false;
 let rejectedRead;
 const preview = 'https://tr.rbxcdn.com/demo/768/432/Image/Webp/noFilter';
+const racingPreviews = [preview, preview.replace('/demo/', '/racing/')];
+const manualPreviews = Array.from({length: 8}, (_, index) => preview.replace('/demo/', `/manual-${index}/`));
 const originalFetch = fetch;
 globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   const {hostname, pathname, searchParams} = new URL(url);
@@ -82,7 +86,7 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   if (hostname === 'www.rolibrary.win') {
     assert.equal(pathname, '/data/charts.json');
     return Response.json({genres: {Racing: {games: [
-      {id: 456, name: 'Downhill Shopping Cart Racing', image: preview, genre: 'Racing'},
+      {id: 456, name: 'Downhill Shopping Cart Racing', thumbnails: racingPreviews, genre: 'Racing'},
       {id: 789, name: 'My Farm', image: preview, genre: 'Simulation', description: 'Race to sell your crops.'}
     ]}}});
   }
@@ -107,12 +111,15 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   }
   if (hostname === 'thumbnails.roblox.com') {
     if (pathname.endsWith('/multiget/thumbnails')) return Response.json({data: searchParams.get('universeIds').split(',')
-      .map(universeId => ({universeId, thumbnails: [{state: 'Completed', imageUrl: preview}]}))});
+      .map(universeId => ({universeId, thumbnails: manualPreviews.map(imageUrl => ({state: 'Completed', imageUrl}))}))});
     return Response.json({data: searchParams.get('assetIds').split(',').map(targetId => ({
       targetId, state: 'Completed', imageUrl: preview
     }))});
   }
-  if (hostname === 'tr.rbxcdn.com') return new Response(image, {headers: {'Content-Type': contentType}});
+  if (hostname === 'tr.rbxcdn.com') {
+    referenceDownloads.push(url);
+    return new Response(image, {headers: {'Content-Type': contentType}});
+  }
   if (pathname === '/search-api/omni-search') {
     assert.equal(searchParams.get('searchQuery'), 'Cart Championship');
     return Response.json({searchResults: [{contentGroupType: 'Game', contents: [
@@ -211,14 +218,18 @@ try {
   await upload('type=asset&kind=Character&name=Cart%20driver&required=1');
   const brief = 'Players race downhill in shopping carts.';
   const found = await action('references', {description: brief});
-  assert.deepEqual(found.suggestions.map(item => item.id), ['456']);
+  assert.equal(found.referenceLimit, 8);
+  assert.deepEqual(found.suggestions.map(item => item.id), racingPreviews);
   assert.match(found.suggestions[0].reason, /race downhill/);
-  await action('brief', {description: brief, references: ['456'], allowText: true, wording: 'CART CHAOS!'});
-  assert.deepEqual((await action('searchGames', {query: 'Cart Championship'})).manualSuggestions.map(item => item.id), ['852']);
+  await action('brief', {description: brief, references: racingPreviews, allowText: true, wording: 'CART CHAOS!'});
+  assert.deepEqual((await action('searchGames', {query: 'Cart Championship'})).manualSuggestions.map(item => item.id), manualPreviews);
   assert.deepEqual((await action('searchGames', {query: 'https://www.roblox.com/games/777/Cart-Championship'}))
-    .manualSuggestions.map(item => item.id), ['852']);
+    .manualSuggestions.map(item => item.id), manualPreviews);
   assert.equal((await post('addReference', {id: '999'})).status, 400);
-  assert.deepEqual((await action('addReference', {id: '852'})).brief.references.map(item => item.id), ['456', '852']);
+  const savedReferences = [...racingPreviews, ...manualPreviews.slice(0, 6)];
+  for (const id of manualPreviews.slice(0, 6)) await action('addReference', {id});
+  assert.deepEqual((await game()).brief.references.map(item => item.id), savedReferences);
+  assert.equal((await post('addReference', {id: manualPreviews[6]})).status, 400);
   await upload('type=starting&name=Finished%20file');
   const first = (await action('start', {target: 10, rounds: 2})).batches[0];
   assert.equal(first.items.length, 10);
@@ -227,9 +238,9 @@ try {
   assert.equal(generations.length, 9);
   assert.ok(generations[0][0].text.includes('Cart driver (must include)'));
   assert.match(generations[0][0].text, /Render this exact text.*"CART CHAOS!"/);
-  assert.equal(generations[0].filter(part => part.inlineData).length, 3);
+  assert.equal(generations[0].filter(part => part.inlineData).length, 9);
   assert.equal(submissions.length, 0);
-  await action('brief', {description: brief, references: ['456', '852'], allowText: false, wording: 'CART CHAOS!'});
+  await action('brief', {description: brief, references: savedReferences, allowText: false, wording: 'CART CHAOS!'});
   assert.equal(swaps.length, 0);
   assert.equal(emails.length, 2);
   assert.equal(emails[0].key, emails[1].key);
@@ -285,6 +296,16 @@ try {
   assert.equal((await batch()).items.filter(item => item.stage === 'excluded').length, 9);
   assert.deepEqual(planSwap({items: [{stage: 'ready', homeId: 'new'}]}, ['a', 'b', 'c', 'd']), ['a', 'b', 'c', 'd', 'new']);
   assert.equal(planSwap({items: [{stage: 'ready', homeId: 'new'}]}, ['a', 'b', 'c']), null);
+  const loadedBrief = (await game()).brief;
+  const fullBrief = {...loadedBrief, assets: Array(8).fill(loadedBrief.assets[0])};
+  const draft = {id: crypto.randomUUID(), description: 'Test composition', parent: {image: preview}};
+  referenceDownloads.length = 0;
+  await generateDraft(env, '123', draft, fullBrief, 'Test prompt', 0);
+  assert.equal(generations.at(-1).filter(part => part.inlineData).length, 14);
+  assert.deepEqual(referenceDownloads.slice(1), savedReferences.slice(0, 5));
+  referenceDownloads.length = 0;
+  await generateDraft(env, '123', draft, fullBrief, 'Test prompt', 1);
+  assert.deepEqual(referenceDownloads.slice(1), [...savedReferences.slice(5), ...savedReferences.slice(0, 2)]);
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;

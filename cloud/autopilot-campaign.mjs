@@ -236,7 +236,7 @@ export async function advanceCampaign(env, owner, game, roblox, save, prompt) {
     const draft = batch.items.find(item => item.stage === 'generating');
     if (draft) {
       try {
-        await generateDraft(env, game.universe, draft, batch.brief, prompt);
+        await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft));
         draft.stage = 'draft';
         draft.imageReady = true;
       } catch {

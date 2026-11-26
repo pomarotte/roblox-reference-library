@@ -106,6 +106,8 @@ button.thumbnail-choice { width: 100%; text-align: left; font-size: .85rem; font
 button.thumbnail-choice:hover:not(:disabled), button.thumbnail-choice[aria-pressed="true"] { border-color: #79cafa; background: #203947; }
 .thumbnail-choice-status { font-weight: 650; }
 button.thumbnail-choice[aria-pressed="true"] .thumbnail-choice-status { color: #c7ebff; }
+.reference-choice { cursor: pointer; }
+.reference-choice:hover, .reference-choice:has(input:checked) { border-color: #79cafa; background: #203947; }
 #autopilot-start-form { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #32323e; padding-top: 1rem; }
 #autopilot-asset-feedback, #autopilot-upload-feedback { margin: 0; }
 #autopilot-asset-feedback:empty, #autopilot-upload-feedback:empty { display: none; }
