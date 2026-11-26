@@ -72,52 +72,68 @@
       </form>
       <div id="autopilot-game" hidden>
         <p id="autopilot-progress"></p>
+        <h3>Live thumbnails</h3>
+        <p id="autopilot-pick-help" class="muted">Click a live thumbnail to add it to your starting pool.</p>
         <div id="autopilot-live" class="thumbnail-grid" aria-label="Active thumbnails"></div>
         <div class="actions" id="autopilot-controls"></div>
-        <form id="autopilot-minimum-form" class="actions" aria-describedby="autopilot-minimum-help">
-          <label>Minimum impressions per thumbnail<input id="autopilot-minimum" type="number" min="1" step="1" required></label>
-          <button type="submit" class="secondary">Save minimum</button>
-          <span id="autopilot-minimum-help" class="muted">Once all five slots are filled, each thumbnail must reach this count in shared reporting hours before a swap.</span>
-        </form>
-        <details id="autopilot-brief">
-          <summary>Creative brief and game assets</summary>
-          <form id="autopilot-brief-form">
-            <label class="full-width">What do players do, and what should the thumbnails show?<textarea id="autopilot-description" rows="4" maxlength="1800" required></textarea></label>
-            <div class="actions"><button class="secondary" id="autopilot-find" type="button">Find similar games</button><button type="submit">Save brief</button></div>
-            <p class="muted full-width" id="autopilot-reference-status" role="status"></p>
-            <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Similar-game thumbnail references"></div>
+        <details class="autopilot-settings">
+            <summary>Rotation settings</summary>
+          <form id="autopilot-minimum-form" class="actions" aria-describedby="autopilot-minimum-help">
+            <label>Minimum impressions per thumbnail<input id="autopilot-minimum" type="number" min="1" step="1" required></label>
+            <button type="submit" class="secondary">Save minimum</button>
+            <span id="autopilot-minimum-help" class="muted">Once all five slots are filled, each thumbnail must reach this count in shared reporting hours before a swap.</span>
           </form>
-          <form id="autopilot-manual-reference-form">
-            <label class="full-width">Find a game by name or Roblox link<input id="autopilot-game-search" type="search" maxlength="300" required placeholder="Game name, Roblox link, or Universe ID"></label>
-            <div class="actions"><button id="autopilot-game-search-button" type="submit" class="secondary">Search games</button></div>
-            <p class="muted full-width" id="autopilot-manual-reference-status" role="status"></p>
-            <div class="thumbnail-grid full-width" id="autopilot-manual-reference-list" aria-label="Manual game search results"></div>
-          </form>
-          <form id="autopilot-asset-form">
-            <label>Asset name<input id="autopilot-asset-name" maxlength="80" required></label>
-            <label>Use as<select id="autopilot-asset-kind"><option>Character</option><option>Environment</option><option>Prop</option><option>Logo</option><option>Gameplay screenshot</option></select></label>
-            <label>Game asset image<input id="autopilot-asset-file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
-            <div class="actions"><label class="check-label"><input id="autopilot-asset-required" type="checkbox">Must include</label><button class="secondary" type="submit">Add game asset</button></div>
-          </form>
-          <div class="thumbnail-grid" id="autopilot-assets" aria-label="Game assets"></div>
+          <button id="autopilot-replace-key" type="button" class="secondary">Update saved key</button>
         </details>
-        <div id="autopilot-pool" hidden>
-          <h3>Starting thumbnails</h3>
-          <div class="thumbnail-grid" id="autopilot-starting" aria-label="Starting thumbnails"></div>
-          <form id="autopilot-upload-form">
-            <label>Upload a finished thumbnail<input id="autopilot-upload-file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
-            <div class="actions"><button class="secondary" type="submit">Add to starting pool</button></div>
-          </form>
-          <details id="autopilot-library">
-            <summary>Pick from Roblox thumbnail history</summary>
-            <p><button id="autopilot-load-library" class="secondary" type="button">Refresh thumbnail history</button></p>
-            <div class="thumbnail-grid" id="autopilot-library-list"></div>
+        <div class="autopilot-workspace">
+          <details id="autopilot-brief" class="autopilot-panel">
+            <summary>Creative brief and game assets</summary>
+            <form id="autopilot-brief-form">
+              <label class="full-width">What do players do, and what should the thumbnails show?<textarea id="autopilot-description" rows="4" maxlength="1800" required></textarea></label>
+              <label class="check-label full-width"><input id="autopilot-allow-text" type="checkbox">Allow text outside reference logos</label>
+              <label id="autopilot-wording-field" class="full-width" hidden>Exact text (optional)<input id="autopilot-wording" type="text" maxlength="160" placeholder="Enter the words to show"></label>
+              <div class="actions"><button class="secondary" id="autopilot-find" type="button">Find similar games</button><button type="submit">Save brief</button></div>
+              <p class="muted full-width" id="autopilot-reference-status" role="status"></p>
+              <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Similar-game thumbnail references"></div>
+            </form>
+            <details class="autopilot-subsection">
+              <summary>Search for a reference game</summary>
+              <form id="autopilot-manual-reference-form">
+                <label class="full-width">Find a game by name or Roblox link<input id="autopilot-game-search" type="search" maxlength="300" required placeholder="Game name, Roblox link, or Universe ID"></label>
+                <div class="actions"><button id="autopilot-game-search-button" type="submit" class="secondary">Search games</button></div>
+                <p class="muted full-width" id="autopilot-manual-reference-status" role="status"></p>
+                <div class="thumbnail-grid full-width" id="autopilot-manual-reference-list" aria-label="Manual game search results"></div>
+              </form>
+            </details>
+            <h3>Game assets</h3>
+            <form id="autopilot-asset-form">
+              <label class="full-width">Game asset images<input id="autopilot-asset-file" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+              <label>Name (optional for one file)<input id="autopilot-asset-name" maxlength="80"></label>
+              <label>Use as<select id="autopilot-asset-kind"><option>Character</option><option>Environment</option><option>Prop</option><option>Logo</option><option>Gameplay screenshot</option></select></label>
+              <div class="actions"><label class="check-label"><input id="autopilot-asset-required" type="checkbox">Must include</label><button id="autopilot-asset-submit" class="secondary" type="submit">Add game assets</button></div>
+              <p id="autopilot-asset-feedback" class="muted full-width" role="status"></p>
+            </form>
+            <div class="thumbnail-grid" id="autopilot-assets" aria-label="Game assets"></div>
           </details>
-          <form id="autopilot-start-form">
-            <label>Thumbnails per round<input id="autopilot-target" type="number" min="1" max="10" value="10" required></label>
-            <label>Round limit<input id="autopilot-rounds" type="number" min="1" max="10" value="3" required></label>
-            <div class="actions"><button type="submit">Start Autopilot</button><span class="muted">RoLibrary generates any remaining drafts and emails you when the batch is ready for review.</span></div>
-          </form>
+          <div id="autopilot-pool" class="autopilot-panel" hidden>
+            <div class="section-header"><h3>Starting pool</h3><span id="autopilot-pool-count" class="muted"></span></div>
+            <div class="thumbnail-grid" id="autopilot-starting" aria-label="Starting thumbnails"></div>
+            <form id="autopilot-upload-form">
+              <label>Upload finished thumbnails<input id="autopilot-upload-file" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+              <div class="actions"><button id="autopilot-upload-submit" class="secondary" type="submit">Add uploads to pool</button></div>
+              <p id="autopilot-upload-feedback" class="muted full-width" role="status"></p>
+            </form>
+            <details id="autopilot-library">
+              <summary>Pick from Roblox thumbnail history</summary>
+              <p><button id="autopilot-load-library" class="secondary" type="button">Refresh thumbnail history</button></p>
+              <div class="thumbnail-grid" id="autopilot-library-list"></div>
+            </details>
+            <form id="autopilot-start-form">
+              <label>Thumbnails per round<input id="autopilot-target" type="number" min="1" max="10" value="10" required></label>
+              <label>Round limit<input id="autopilot-rounds" type="number" min="1" max="10" value="3" required></label>
+              <div class="actions"><button type="submit">Start Autopilot</button><span class="muted">RoLibrary generates any remaining drafts and emails you when the batch is ready for review.</span></div>
+            </form>
+          </div>
         </div>
         <div id="autopilot-review" hidden>
           <div class="section-header"><h3 id="autopilot-review-heading" tabindex="-1">Thumbnail batches</h3><label>Round<select id="autopilot-batches"></select></label></div>

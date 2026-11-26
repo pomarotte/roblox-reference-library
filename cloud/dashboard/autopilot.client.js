@@ -134,6 +134,10 @@
     referenceChoices.clear();
     referenceStatus.textContent = '';
     manualReferenceStatus.textContent = '';
+    get('autopilot-asset-feedback').textContent = '';
+    get('autopilot-upload-feedback').textContent = '';
+    get('autopilot-asset-form').reset();
+    get('autopilot-upload-form').reset();
     get('autopilot-game-search').value = '';
     manualVersion = undefined;
     get('autopilot-game').hidden = true;
@@ -166,7 +170,8 @@
     const ticket = selection, universe = selected;
     const searching = action === 'references';
     const manualSearch = action === 'searchGames';
-    const feedback = searching ? referenceStatus : manualSearch || action === 'addReference' ? manualReferenceStatus : status;
+    const feedback = searching || action === 'brief' ? referenceStatus
+      : manualSearch || action === 'addReference' ? manualReferenceStatus : status;
     busy = true;
     section.setAttribute('aria-busy', 'true');
     feedback.textContent = searching || manualSearch ? 'Searching for thumbnail references…' : 'Saving…';
@@ -189,7 +194,7 @@
       if (['start', 'approve', 'regenerate'].includes(action)) reviewSet.clear();
       if (action === 'brief') referenceChoices.clear();
       if (action === 'addReference') referenceChoices.delete(payload.id);
-      if (['brief', 'references'].includes(action)) briefVersion = undefined;
+      if (action === 'brief') briefVersion = undefined;
       status.textContent = action === 'approve' ? 'Approved. Autopilot will submit the selected images.' : '';
       renderAutopilot(view);
       if (searching) {
@@ -201,6 +206,7 @@
       if (manualSearch) feedback.textContent = view.manualSuggestions.length
         ? 'Choose a thumbnail to add it to your brief.' : 'No thumbnails found. Try a different title or paste the game’s Roblox link.';
       if (action === 'addReference') feedback.textContent = 'Thumbnail added to your creative brief.';
+      if (action === 'brief') feedback.textContent = 'Creative brief saved.';
       refreshTabs().catch(() => {});
       if (action === 'key') {
         get('autopilot-key-input').value = '';
@@ -221,10 +227,16 @@
 
   function renderBrief(view) {
     const {brief, suggestions} = view, node = get('autopilot-description');
+    const allow = get('autopilot-allow-text'), wording = get('autopilot-wording');
     const fingerprint = JSON.stringify([brief, suggestions]);
     if (briefVersion === fingerprint) return;
     if (briefVersion === undefined || node.value === node.defaultValue) node.value = brief.description;
     node.defaultValue = brief.description;
+    if (briefVersion === undefined || allow.checked === allow.defaultChecked) allow.checked = Boolean(brief.allowText);
+    if (briefVersion === undefined || wording.value === wording.defaultValue) wording.value = brief.wording || '';
+    allow.defaultChecked = Boolean(brief.allowText);
+    wording.defaultValue = brief.wording || '';
+    get('autopilot-wording-field').hidden = !allow.checked;
     briefVersion = fingerprint;
     const saved = new Set(brief.references.map(item => item.id));
     const offered = [...new Map([...brief.references, ...suggestions].map(item => [item.id, item])).values()];
@@ -247,6 +259,23 @@
     }));
   }
 
+  function thumbnailChoice(view, id, image, name, details) {
+    const picked = view.starting.find(item => item.homeId === id);
+    const choice = button('', async () => {
+      const grid = document.activeElement === choice ? choice.parentElement : null;
+      const updated = picked ? await act('removeStarting', {id: picked.id}) : await act('pick', {id});
+      if (updated && grid) [...grid.children].find(item => item.dataset.homeId === id)?.focus();
+    });
+    choice.className = 'thumbnail-card thumbnail-choice secondary';
+    choice.dataset.homeId = id;
+    choice.setAttribute('aria-pressed', String(Boolean(picked)));
+    choice.setAttribute('aria-label', name);
+    choice.disabled = !picked && view.starting.length >= 10;
+    choice.append(preview(image, ''), el('span', picked ? 'In starting pool' : 'Add to starting pool', 'thumbnail-choice-status'));
+    if (details) choice.append(el('span', details, 'muted'));
+    return choice;
+  }
+
   function renderManualReferences(view) {
     const results = view.manualSuggestions || [];
     const selected = view.brief.references.map(item => item.id);
@@ -267,20 +296,19 @@
     const fingerprint = JSON.stringify([view.starting, view.library, editable]);
     if (libraryVersion === fingerprint) return;
     libraryVersion = fingerprint;
-    get('autopilot-starting').replaceChildren(...view.starting.map(item => {
+    get('autopilot-pool-count').textContent = `${view.starting.length} of 10 selected`;
+    const starting = view.starting.map(item => {
       const node = card('Starting thumbnail', item.existing ? item.image : media(item.id), null, false);
       node.append(button('Remove from pool', () => act('removeStarting', {id: item.id})));
       return node;
-    }));
+    });
+    get('autopilot-starting').replaceChildren(...(starting.length ? starting : [
+      el('p', 'Start with a live thumbnail, an upload, or an image from history.', 'muted full-width')
+    ]));
     get('autopilot-target').min = Math.max(1, view.starting.length);
     if (Number(get('autopilot-target').value) < view.starting.length) get('autopilot-target').value = view.starting.length;
-    const nodes = view.library.filter(item => item.approved && item.image).map(item => {
-      const node = card('Home thumbnail', item.image, item.active ? 'Currently active' : 'Previously uploaded', false);
-      const add = button('Add to pool', () => act('pick', {id: item.homeId}));
-      add.disabled = view.starting.length >= 10 || view.starting.some(candidate => candidate.homeId === item.homeId);
-      node.append(add);
-      return node;
-    });
+    const nodes = view.library.filter(item => item.approved && item.image && !view.active.includes(item.homeId))
+      .map((item, index) => thumbnailChoice(view, item.homeId, item.image, `Archived thumbnail ${index + 1}`));
     get('autopilot-library-list').replaceChildren(...(nodes.length ? nodes : [
       el('p', 'Refresh to show available Home thumbnails for this game.', 'muted')
     ]));
@@ -294,7 +322,10 @@
 
   function renderLive(view) {
     const activePreviews = view.active.map(id => connection?.thumbnailImages?.get(id));
-    const fingerprint = JSON.stringify([view.active, activePreviews, view.measurements, view.library, view.batches.flatMap(batch =>
+    const editable = !view.batches.length || view.batches.at(-1).phase === 'complete';
+    const activeResults = view.active.map(id => metrics(view.measurements?.find(row => row.homeId === id)
+      || connection?.data?.rows.find(row => row.homeId === id)));
+    const fingerprint = JSON.stringify([view.active, activePreviews, activeResults, view.library, editable, view.starting, view.batches.flatMap(batch =>
       batch.items.filter(item => view.active.includes(item.homeId)))]);
     if (liveVersion === fingerprint) return;
     liveVersion = fingerprint;
@@ -302,9 +333,9 @@
     get('autopilot-live').replaceChildren(...view.active.map((id, index) => {
       const item = history.find(candidate => candidate.homeId === id && (candidate.imageReady || candidate.image))
         || view.library.find(candidate => candidate.homeId === id);
-      const result = view.measurements?.find(row => row.homeId === id);
       const image = item?.image || (item?.id ? media(item.id) : activePreviews[index]);
-      return card(`Active thumbnail ${index + 1}`, image, metrics(result), false);
+      const name = `Active thumbnail ${index + 1}`;
+      return editable ? thumbnailChoice(view, id, image, name, activeResults[index]) : card(name, image, activeResults[index], false);
     }));
   }
 
@@ -381,11 +412,13 @@
     const minimum = get('autopilot-minimum');
     if (!game || minimum.value === minimum.defaultValue) minimum.value = String(view.minimum);
     minimum.defaultValue = String(view.minimum);
+    if (!game) get('autopilot-brief').open = !view.batches.length;
     game = view;
     const current = game.batches.at(-1);
     const editable = !current || current.phase === 'complete';
     get('autopilot-game').hidden = false;
     get('autopilot-pool').hidden = !editable;
+    get('autopilot-pick-help').hidden = !editable || !game.active.length;
     const message = game.paused ? 'Paused' : current ? ({
       generating: `Generating round ${current.number} · ${current.items.filter(item => item.stage !== 'generating').length} of ${current.items.length} processed`,
       review: 'Batch ready for your review', testing: `Testing round ${current.number}`, complete: 'Campaign complete'
@@ -394,11 +427,7 @@
     if (infoVersion !== progress) {
       infoVersion = progress;
       get('autopilot-progress').textContent = progress;
-      const controls = [button('Update saved key', () => {
-        get('autopilot-key').hidden = false;
-        get('autopilot-connect').textContent = 'Update saved key';
-        get('autopilot-key-input').focus();
-      })];
+      const controls = [];
       if (!editable) controls.unshift(button(game.paused ? 'Resume' : 'Pause', () => act(game.paused ? 'resume' : 'pause')));
       if (['review', 'testing'].includes(current?.phase)) controls.push(button('Sync active set', () => act('sync')));
       get('autopilot-controls').replaceChildren(...controls);
@@ -408,6 +437,44 @@
     renderPool(view, editable);
     renderLive(view);
     renderDrafts(view, current);
+  }
+
+  async function uploadImages(event, asset) {
+    event.preventDefault();
+    if (!game || busy) return;
+    const prefix = asset ? 'autopilot-asset' : 'autopilot-upload';
+    const files = [...get(`${prefix}-file`).files];
+    const feedback = get(`${prefix}-feedback`), submit = get(`${prefix}-submit`);
+    const remaining = asset ? 8 - game.brief.assets.length : 10 - game.starting.length;
+    if (!files.length) return;
+    if (files.length > remaining) {
+      feedback.textContent = remaining ? `Choose up to ${remaining} more ${remaining === 1 ? 'image' : 'images'}.` : 'The list is full. Remove an image before adding another.';
+      return;
+    }
+    const universe = game.universe, ticket = selection;
+    const settings = asset ? {type: 'asset', kind: get('autopilot-asset-kind').value,
+      required: get('autopilot-asset-required').checked ? '1' : '0'} : {type: 'starting'};
+    const customName = asset && files.length === 1 ? get('autopilot-asset-name').value.trim() : '';
+    const errors = [];
+    busy = submit.disabled = true;
+    try {
+      for (const [index, file] of files.entries()) {
+        if (selection !== ticket) return;
+        feedback.textContent = `Uploading ${index + 1} of ${files.length}…`;
+        const name = (customName || file.name.replace(/\.[^.]+$/, '').trim() || 'Image').slice(0, 80);
+        try {
+          const view = await api(universe, null, file, {...settings, name});
+          if (selection === ticket) renderAutopilot(view);
+        } catch (error) { errors.push(`${file.name} (${error.message})`); }
+      }
+      if (selection === ticket) {
+        if (errors.length < files.length) event.target.reset();
+        const added = files.length - errors.length;
+        feedback.textContent = `${added} ${added === 1 ? 'image' : 'images'} added.${errors.length ? ` Could not add: ${errors.join(', ')}` : ''}`;
+      }
+    } finally {
+      busy = submit.disabled = false;
+    }
   }
 
   get('autopilot-key').addEventListener('submit', event => {
@@ -440,8 +507,12 @@
   });
   get('autopilot-brief-form').addEventListener('submit', event => {
     event.preventDefault();
-    act('brief', {description: get('autopilot-description').value, references: [...get('autopilot-reference-list')
-      .querySelectorAll('input:checked')].map(input => input.value)});
+    return act('brief', {description: get('autopilot-description').value, references: [...get('autopilot-reference-list')
+      .querySelectorAll('input:checked')].map(input => input.value), allowText: get('autopilot-allow-text').checked,
+      wording: get('autopilot-wording').value});
+  });
+  get('autopilot-allow-text').addEventListener('change', event => {
+    get('autopilot-wording-field').hidden = !event.target.checked;
   });
   get('autopilot-find').addEventListener('click', () =>
     act('references', {description: get('autopilot-description').value}));
@@ -449,17 +520,17 @@
     event.preventDefault();
     return act('searchGames', {query: get('autopilot-game-search').value});
   });
-  get('autopilot-asset-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    if (await act('image', {}, get('autopilot-asset-file').files[0], {type: 'asset', name: get('autopilot-asset-name').value,
-      kind: get('autopilot-asset-kind').value, required: get('autopilot-asset-required').checked ? '1' : '0'})) event.target.reset();
-  });
-  get('autopilot-upload-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const file = get('autopilot-upload-file').files[0];
-    if (await act('image', {}, file, {type: 'starting', name: file.name.slice(0, 80)})) event.target.reset();
-  });
+  get('autopilot-asset-form').addEventListener('submit', event => uploadImages(event, true));
+  get('autopilot-upload-form').addEventListener('submit', event => uploadImages(event, false));
   get('autopilot-load-library').addEventListener('click', () => act('library'));
+  get('autopilot-library').addEventListener('toggle', event => {
+    if (event.target.open && game && !game.library.length) act('library');
+  });
+  get('autopilot-replace-key').addEventListener('click', () => {
+    get('autopilot-key').hidden = false;
+    get('autopilot-connect').textContent = 'Update saved key';
+    get('autopilot-key-input').focus();
+  });
   get('autopilot-minimum-form').addEventListener('submit', async event => {
     event.preventDefault();
     const field = get('autopilot-minimum'), minimum = field.valueAsNumber;

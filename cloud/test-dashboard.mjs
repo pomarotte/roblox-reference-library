@@ -88,7 +88,7 @@ try {
       addEventListener(event, fn) { this.listeners[event] = fn; },
       replaceChildren(...nodes) { this.children = nodes; },
       append(...nodes) { this.children.push(...nodes); },
-      setAttribute() {}, removeAttribute() {}, contains() { return false; }, focus() {}
+      setAttribute() {}, removeAttribute() {}, contains() { return false; }, focus() {}, reset() {}, querySelectorAll() { return []; }
     });
     return elements.get(id);
   };
@@ -188,11 +188,22 @@ try {
       items: [{id: 'draft-1', label: 'Draft 1', stage: 'draft', imageReady: true}]}]};
   const legacyFetch = browser.fetch;
   const approvals = [];
+  const uploads = [];
   Object.assign(browser, {URL, URLSearchParams,
     location: new URL(`${origin}/?game=456&batch=${openBatch}`), history: {replaceState() {}},
     async fetch(path, options) {
       if (path === '/api/autopilot?') return Response.json({enabled: true,
         games: [{universe: '123', name: 'First game'}, {universe: '456', name: 'Second game', review: true}]});
+      if (path.startsWith('/api/autopilot?type=')) {
+        const query = new URL(path, origin).searchParams;
+        assert.equal(query.get('game'), '456');
+        const type = query.get('type'), name = query.get('name');
+        uploads.push([type, name]);
+        if (name === 'Broken') return Response.json({error: 'Invalid image.'}, {status: 400});
+        if (type === 'asset') savedGame.brief.assets.push({id: name, name, kind: query.get('kind')});
+        else savedGame.starting.push({id: name, label: name});
+        return Response.json(savedGame);
+      }
       if (path === '/api/autopilot?game=456') {
         if (!options) return Response.json(savedGame);
         const command = JSON.parse(options.body);
@@ -214,6 +225,18 @@ try {
         }
         if (command.action === 'addReference') {
           savedGame.brief.references = savedGame.manualSuggestions.filter(item => item.id === command.id);
+          return Response.json(savedGame);
+        }
+        if (command.action === 'brief') {
+          Object.assign(savedGame.brief, {allowText: command.allowText, wording: command.wording});
+          return Response.json(savedGame);
+        }
+        if (command.action === 'pick') {
+          savedGame.starting.push({id: 'picked-1', homeId: command.id, existing: true, image: previewUrl(101)});
+          return Response.json(savedGame);
+        }
+        if (command.action === 'removeStarting') {
+          savedGame.starting = savedGame.starting.filter(item => item.id !== command.id);
           return Response.json(savedGame);
         }
         approvals.push(command);
@@ -256,6 +279,34 @@ try {
   await element('autopilot-approve').listeners.click();
   assert.deepEqual(approvals, [{action: 'approve', batch: openBatch, ids: ['draft-1']}]);
   assert.equal(element('autopilot-approval').hidden, true);
+  savedGame.batches = [];
+  savedGame.active = ['second'];
+  savedGame.library = [{homeId: 'old', approved: true, image: previewUrl(102)}];
+  timers.get(20_000)();
+  await new Promise(resolve => setImmediate(resolve));
+  const liveCard = element('autopilot-live').children[0];
+  assert.equal(liveCard.tagName, 'button');
+  await liveCard.listeners.click();
+  assert.equal(savedGame.starting[0].homeId, 'second');
+  await element('autopilot-live').children[0].listeners.click();
+  assert.equal(savedGame.starting.length, 0);
+  await element('autopilot-library-list').children[0].listeners.click();
+  assert.equal(savedGame.starting[0].homeId, 'old');
+  const file = name => ({name, type: 'image/png'});
+  element('autopilot-asset-file').files = [file('Driver.png'), file('Map.png')];
+  await element('autopilot-asset-form').listeners.submit({target: element('autopilot-asset-form'), preventDefault() {}});
+  assert.deepEqual(savedGame.brief.assets.map(asset => asset.name), ['Driver', 'Map']);
+  element('autopilot-upload-file').files = [file('One.png'), file('Broken.png'), file('Two.png')];
+  await element('autopilot-upload-form').listeners.submit({target: element('autopilot-upload-form'), preventDefault() {}});
+  assert.deepEqual(uploads, [['asset', 'Driver'], ['asset', 'Map'], ['starting', 'One'], ['starting', 'Broken'], ['starting', 'Two']]);
+  assert.match(element('autopilot-upload-feedback').textContent, /2 images added.*Broken/);
+  const allowText = element('autopilot-allow-text');
+  allowText.checked = true;
+  allowText.listeners.change({target: allowText});
+  assert.equal(element('autopilot-wording-field').hidden, false);
+  element('autopilot-wording').value = 'CART CHAOS!';
+  await element('autopilot-brief-form').listeners.submit({preventDefault() {}});
+  assert.equal(savedGame.brief.wording, 'CART CHAOS!');
 } finally {
   globalThis.fetch = originalFetch;
 }

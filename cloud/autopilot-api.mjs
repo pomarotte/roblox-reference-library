@@ -136,7 +136,14 @@ async function updateGame(request, env, row, game, url, body) {
       requireInput(Array.isArray(body.references) && body.references.length <= 3, 'Choose up to three similar-game references.');
       const offered = new Map([...game.brief.references, ...game.suggestions].map(reference => [reference.id, reference]));
       requireInput(body.references.every(id => offered.has(id)), 'Choose references from the suggested games.');
+      requireInput((body.allowText === undefined || typeof body.allowText === 'boolean') &&
+        (body.wording === undefined || typeof body.wording === 'string' && body.wording.length <= 160),
+      'Enter up to 160 characters of thumbnail text.');
       game.brief.references = [...new Set(body.references)].map(id => offered.get(id));
+      if (body.allowText !== undefined) {
+        game.brief.allowText = body.allowText;
+        game.brief.wording = body.allowText ? clean(body.wording, 160) : '';
+      }
     }
     game.brief.description = description;
   } else if (action === 'searchGames') {
@@ -158,9 +165,14 @@ async function updateGame(request, env, row, game, url, body) {
     requireInput(editablePool(batch), 'Start a new campaign to change the starting pool.');
     if (action === 'removeStarting') game.starting = game.starting.filter(item => item.id !== body.id);
     else {
-      const item = game.library.find(candidate => candidate.homeId === body.id);
-      requireInput(item?.approved && item.image && game.starting.length < 10 && !game.starting.some(candidate =>
-        candidate.homeId === item.homeId), 'Choose an available thumbnail that is not already in the pool.');
+      requireInput(typeof body.id === 'string' && /^[\w-]{1,128}$/.test(body.id) && game.starting.length < 10 &&
+        !game.starting.some(candidate => candidate.homeId === body.id), 'Choose an available thumbnail that is not already in the pool.');
+      let item = game.library.find(candidate => candidate.homeId === body.id);
+      if (!item?.approved && game.active.includes(body.id)) {
+        game.library = await populateLibrary(await roblox());
+        item = game.library.find(candidate => candidate.homeId === body.id);
+      }
+      requireInput(item?.approved && item.image, 'Roblox does not have an approved preview for this thumbnail yet.');
       game.starting.push({...item, id: crypto.randomUUID(), existing: true, stage: 'draft'});
     }
   } else if (action === 'minimum') {

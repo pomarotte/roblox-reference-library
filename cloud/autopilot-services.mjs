@@ -209,12 +209,18 @@ export function describeDraft(brief, index, parent) {
     parent && `Use the performance reference ${parent.label} as the starting composition. Preserve its recognizable subject and change the camera or emphasis to match this direction.`,
     assets && `Use these supplied game assets as the source of truth: ${assets}.`,
     references && `Use the following similar-game examples only for framing, lighting, or composition: ${references}. Do not reproduce their characters, names, logos or distinctive graphic layouts.`,
-    'Compose for a 16:9 Home feed tile. Keep the main action readable at small sizes. Avoid added lettering unless the brief explicitly requires it.'
+    'Compose for a 16:9 Home feed tile. Keep the main action readable at small sizes.'
   ].filter(Boolean).join('\n');
 }
 
 export async function generateDraft(env, universe, item, brief, prompt) {
-  const parts = [{text: `${prompt}\n\n${item.description}`}];
+  let text = 'Do not add titles, captions, signage, watermarks, or other text. Preserve lettering within supplied game logos only.';
+  if (brief.allowText) {
+    text = brief.wording
+      ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(brief.wording)}. Avoid unrelated lettering and watermarks.`
+      : 'Text is allowed. Use wording from the game brief if provided, or a short title if it fits. Avoid unrelated lettering and watermarks.';
+  }
+  const parts = [{text: `${prompt}\n\n${item.description}\n\nTEXT SETTINGS:\n${text}`}];
   for (const asset of brief.assets) {
     const source = await env.AUTOPILOT_MEDIA.get(imageKey(universe, asset.id));
     if (!source) throw new Error('A game asset is missing.');

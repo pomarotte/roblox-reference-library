@@ -189,6 +189,11 @@ try {
   rejectedRead = undefined;
   await action('connect', {name: 'Cart park', key: 'example-key'});
   await action('connect', {name: 'Different game', key: 'example-key'}, '456');
+  assert.equal((await game()).library.length, 0);
+  const picked = (await action('pick', {id: 'base'})).starting[0];
+  assert.equal(picked.existing, true);
+  assert.equal(picked.image, preview);
+  await action('removeStarting', {id: picked.id});
   assert.equal((await game()).minimum, 10_000);
   assert.equal((await post('minimum', {minimum: 0})).status, 400);
   assert.equal((await post('minimum', {minimum: 1.5})).status, 400);
@@ -208,7 +213,7 @@ try {
   const found = await action('references', {description: brief});
   assert.deepEqual(found.suggestions.map(item => item.id), ['456']);
   assert.match(found.suggestions[0].reason, /race downhill/);
-  await action('brief', {description: brief, references: ['456']});
+  await action('brief', {description: brief, references: ['456'], allowText: true, wording: 'CART CHAOS!'});
   assert.deepEqual((await action('searchGames', {query: 'Cart Championship'})).manualSuggestions.map(item => item.id), ['852']);
   assert.deepEqual((await action('searchGames', {query: 'https://www.roblox.com/games/777/Cart-Championship'}))
     .manualSuggestions.map(item => item.id), ['852']);
@@ -221,8 +226,10 @@ try {
   for (let attempt = 0; attempt < 12; attempt++) await tick();
   assert.equal(generations.length, 9);
   assert.ok(generations[0][0].text.includes('Cart driver (must include)'));
+  assert.match(generations[0][0].text, /Render this exact text.*"CART CHAOS!"/);
   assert.equal(generations[0].filter(part => part.inlineData).length, 3);
   assert.equal(submissions.length, 0);
+  await action('brief', {description: brief, references: ['456', '852'], allowText: false, wording: 'CART CHAOS!'});
   assert.equal(swaps.length, 0);
   assert.equal(emails.length, 2);
   assert.equal(emails[0].key, emails[1].key);
@@ -267,6 +274,8 @@ try {
   while ((await batch()).phase === 'generating') await tick();
   await tick();
   assert.equal(emails.length, 3);
+  assert.match(generations.at(-1)[0].text, /Do not add titles/);
+  assert.doesNotMatch(generations.at(-1)[0].text, /CART CHAOS!/);
   assert.equal(submissions.length, 10, 'The next round waits for approval');
   const nextReview = await batch();
   await action('approve', {batch: nextReview.id, ids: [nextReview.items[0].id]});
