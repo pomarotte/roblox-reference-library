@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {DatabaseSync} from 'node:sqlite';
 import {serveDashboard} from './dashboard-api.mjs';
-import {runAutopilot} from './autopilot-api.mjs';
+import {runAutopilot, runCampaign} from './autopilot-api.mjs';
 import {planSwap} from './autopilot-campaign.mjs';
 import {generateDraft} from './autopilot-services.mjs';
 
@@ -21,6 +21,7 @@ const db = {
   }
 };
 const stored = new Map(), image = new Uint8Array([1, 2, 3]), contentType = 'image/jpeg';
+const queue = [];
 const media = {
   async put(key, data, metadata) { stored.set(key, {data, ...metadata}); },
   async get(key) {
@@ -33,9 +34,12 @@ const env = {ACCESS_AUDIENCE: 'dashboard', WATCH_ACTIVITY: db, AUTOPILOT_MEDIA: 
     response: () => new Response(image, {headers: {'Content-Type': format}})
   })})})},
   AUTOPILOT_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), AUTOPILOT_GEMINI_KEY: 'gemini-test',
-  AUTOPILOT_RESEND_KEY: 'resend-test', AUTOPILOT_MAIL_FROM: 'testing@example.com'};
+  AUTOPILOT_RESEND_KEY: 'resend-test', AUTOPILOT_MAIL_FROM: 'testing@example.com',
+  AUTOPILOT_QUEUE: {send: async message => { queue.push(message); }}};
 const origin = 'https://analytics.rolibrary.win', owner = 'creator@example.com';
-const user = (email = owner) => ({access: {aud: 'dashboard', getIdentity: async () => ({email})}});
+const pending = [];
+const user = (email = owner) => ({access: {aud: 'dashboard', getIdentity: async () => ({email})},
+  waitUntil: promise => pending.push(promise)});
 const endpoint = (query = '', init, ctx = user()) => serveDashboard(
   new Request(`${origin}/api/autopilot?${query}`, init), env, ctx, {});
 const post = (action, payload = {}, universe = '123', email = owner) => endpoint(`game=${universe}`, {
@@ -72,6 +76,7 @@ for (const [index, id] of active.entries()) {
     rate: .2 - index * .02});
 }
 const emails = [], generations = [], submissions = [], swaps = [];
+let currentGenerations = 0, peakGenerations = 0;
 const referenceDownloads = [];
 const operations = new Map();
 let moderated = false, enoughTraffic = false;
@@ -107,6 +112,10 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
       ])}]}}]});
     }
     generations.push(content.contents[0].parts);
+    currentGenerations++;
+    peakGenerations = Math.max(peakGenerations, currentGenerations);
+    await new Promise(resolve => setImmediate(resolve));
+    currentGenerations--;
     return Response.json({candidates: [{content: {parts: [{inlineData: {data: 'AQID'}}]}}]});
   }
   if (hostname === 'thumbnails.roblox.com') {
@@ -232,10 +241,17 @@ try {
   assert.equal((await post('addReference', {id: manualPreviews[6]})).status, 400);
   await upload('type=starting&name=Finished%20file');
   const first = (await action('start', {target: 10, rounds: 2})).batches[0];
+  await Promise.all(pending.splice(0));
+  assert.equal(queue.length, 1, 'Starting the campaign queues generation immediately');
   assert.equal(first.items.length, 10);
   assert.equal((await post('approve', {batch: first.id, ids: [first.items[0].id]})).status, 400);
-  for (let attempt = 0; attempt < 12; attempt++) await tick();
+  while (queue.length) {
+    const job = queue.shift();
+    await runCampaign(env, 'Existing RoLibrary GFX instructions', job.owner, job.universe);
+  }
+  await tick();
   assert.equal(generations.length, 9);
+  assert.equal(peakGenerations, 3, 'Drafts generate concurrently');
   assert.ok(generations[0][0].text.includes('Cart driver (must include)'));
   assert.match(generations[0][0].text, /Render this exact text.*"CART CHAOS!"/);
   assert.equal(generations[0].filter(part => part.inlineData).length, 9);

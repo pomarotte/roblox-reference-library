@@ -254,7 +254,7 @@ async function updateGame(request, env, row, game, url, body) {
   }
 }
 
-export async function autopilotApi(request, env, owner) {
+export async function autopilotApi(request, env, owner, ctx) {
   const url = new URL(request.url), universe = url.searchParams.get('game') || '';
   if (!enabled(env)) return json(request.method === 'GET' && !universe
     ? {enabled: false, games: []} : {error: 'Autopilot is not configured.'}, request.method === 'GET' && !universe ? 200 : 503);
@@ -295,6 +295,9 @@ export async function autopilotApi(request, env, owner) {
       const next = game.paused || !batch || batch.phase === 'complete' ? null
         : reschedule ? Date.now() : row.next_check;
       await saveGame(db, row, game, next);
+      if (!game.paused && batch?.phase === 'generating' && ['start', 'regenerate', 'resume'].includes(body.action)) {
+        ctx?.waitUntil?.(env.AUTOPILOT_QUEUE.send({owner, universe}).catch(() => {}));
+      }
       return json(publicGame(game));
     } finally {
       await release(db, row);
@@ -305,19 +308,14 @@ export async function autopilotApi(request, env, owner) {
   }
 }
 
-export async function runAutopilot(env, prompt) {
-  if (!enabled(env)) return;
-  const db = env.WATCH_ACTIVITY, now = Date.now();
-  const {results} = await db.prepare(`
-    SELECT owner, universe FROM autopilot_games WHERE next_check <= ? AND lease_until <= ?
-    ORDER BY next_check LIMIT 4
-  `).bind(now, now).all();
-  await Promise.all(results.map(async ({owner, universe}) => {
+export async function runCampaign(env, prompt, owner, universe) {
+    const db = env.WATCH_ACTIVITY;
     const row = await lease(db, owner, universe);
-    if (!row) return;
+    if (!row) return false;
     try {
-      if (row.next_check === null || row.next_check > Date.now()) return;
+      if (row.next_check === null || row.next_check > Date.now()) return true;
       const game = JSON.parse(row.state);
+      const previousPhase = batchOf(game)?.phase;
       const save = () => saveGame(db, row, game, row.next_check);
       let delay;
       try {
@@ -333,9 +331,23 @@ export async function runAutopilot(env, prompt) {
           delay = 15 * minute;
         }
       }
+      if (!game.paused && previousPhase !== 'generating' && batchOf(game)?.phase === 'generating') delay = 0;
       await saveGame(db, row, game, game.paused || delay === null ? null : Date.now() + delay);
+      if (!game.paused && ['generating', 'review'].includes(batchOf(game)?.phase) && delay === 0) {
+        await env.AUTOPILOT_QUEUE.send({owner, universe});
+      }
+      return true;
     } finally {
       await release(db, row);
     }
-  }));
+}
+
+export async function runAutopilot(env, prompt) {
+  if (!enabled(env)) return;
+  const db = env.WATCH_ACTIVITY, now = Date.now();
+  const {results} = await db.prepare(`
+    SELECT owner, universe FROM autopilot_games WHERE next_check <= ? AND lease_until <= ?
+    ORDER BY next_check LIMIT 4
+  `).bind(now, now).all();
+  await Promise.all(results.map(({owner, universe}) => runCampaign(env, prompt, owner, universe)));
 }

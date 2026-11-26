@@ -25,6 +25,16 @@ binding = "AUTOPILOT_IMAGES"
 [triggers]
 crons = ["*/2 * * * *"]
 
+[[queues.producers]]
+binding = "AUTOPILOT_QUEUE"
+queue = "rolibrary-autopilot-generation"
+
+[[queues.consumers]]
+queue = "rolibrary-autopilot-generation"
+max_batch_size = 1
+max_batch_timeout = 0
+max_retries = 10
+
 [[rules]]
 type = "Text"
 globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/thumbnail-prompt.txt"]

@@ -233,17 +233,19 @@ export async function advanceCampaign(env, owner, game, roblox, save, prompt) {
   if (!batch || game.paused || batch.phase === 'complete') return null;
   game.problem = null;
   if (batch.phase === 'generating') {
-    const draft = batch.items.find(item => item.stage === 'generating');
-    if (draft) {
-      try {
-        await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft));
-        draft.stage = 'draft';
-        draft.imageReady = true;
-      } catch (error) {
-        draft.stage = 'generationFailed';
-        draft.detail = /^(A thumbnail reference|Gemini generation failed|Could not reach Gemini|The generated image|A game asset is missing|Gemini did not return an image)/.test(error.message)
-          ? error.message : 'Generation failed unexpectedly. Try this draft again.';
-      }
+    const drafts = batch.items.filter(item => item.stage === 'generating').slice(0, 3);
+    if (drafts.length) {
+      await Promise.all(drafts.map(async draft => {
+        try {
+          await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft));
+          draft.stage = 'draft';
+          draft.imageReady = true;
+        } catch (error) {
+          draft.stage = 'generationFailed';
+          draft.detail = /^(A thumbnail reference|Gemini generation failed|Could not reach Gemini|The generated image|A game asset is missing|Gemini did not return an image)/.test(error.message)
+            ? error.message : 'Generation failed unexpectedly. Try this draft again.';
+        }
+      }));
       return 0;
     }
     batch.phase = 'review';

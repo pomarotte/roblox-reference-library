@@ -566,4 +566,7 @@
     refreshTabs().catch(() => {});
     refreshGame();
   }, 20_000);
+  setInterval(() => {
+    if (game?.batches.at(-1)?.phase === 'generating') refreshGame();
+  }, 3_000);
 })();

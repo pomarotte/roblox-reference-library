@@ -4,7 +4,7 @@ import css from './dashboard/dashboard.css';
 import script from './dashboard/dashboard.client.js';
 import autopilot from './dashboard/autopilot.client.js';
 import prompt from '../web/thumbnail-prompt.txt';
-import {runAutopilot} from './autopilot-api.mjs';
+import {runAutopilot, runCampaign} from './autopilot-api.mjs';
 
 const assets = {
   '/': [html, 'text/html; charset=utf-8'],
@@ -19,5 +19,12 @@ export default {
   },
   scheduled(_controller, env) {
     return runAutopilot(env, prompt);
+  },
+  async queue(batch, env) {
+    for (const message of batch.messages) {
+      const {owner, universe} = message.body;
+      if (await runCampaign(env, prompt, owner, universe)) message.ack();
+      else message.retry({delaySeconds: 5});
+    }
   }
 };

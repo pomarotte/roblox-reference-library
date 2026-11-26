@@ -37,7 +37,7 @@ export async function serveDashboard(request, env, ctx, assets) {
   }
   if (pathname === '/api/autopilot') {
     const identity = await ctx.access.getIdentity();
-    return identity?.email ? autopilotApi(request, env, identity.email.toLowerCase())
+    return identity?.email ? autopilotApi(request, env, identity.email.toLowerCase(), ctx)
       : json({error: 'Sign in with your authorized email address.'}, 403);
   }
   if (pathname !== '/api/performance') return json({error: 'Page not found.'}, 404);
