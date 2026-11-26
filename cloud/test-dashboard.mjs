@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {serveDashboard} from './dashboard-api.mjs';
+import {homeAnalytics} from './home-analytics.mjs';
 
 const origin = 'https://analytics.rolibrary.win';
 const access = {aud: 'dashboard', getIdentity: async () => ({email: 'creator@example.com'})};
@@ -80,6 +81,23 @@ try {
   const withoutImages = await (await performance(credentials)).json();
   assert.equal(withoutImages.rows[0].image, undefined);
   assert.equal(withoutImages.rows[0].impressions, 15_000);
+  const dashboardFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const query = JSON.parse(options.body);
+    const views = query.metric === 'ThumbnailImpressions';
+    return Response.json({done: true, response: {values: ['100', '101'].map((id, index) => ({
+      breakdowns: [{dimension: 'ThumbnailAsset', value: id}], dataPoints: [{
+        time: new Date(Date.parse(query.startTime) + index * 3_600_000).toISOString(), value: views ? 12_000 : 120
+      }]
+    }))}});
+  };
+  const candidates = [{homepageThumbnailId: 'first', assetId: 100}, {homepageThumbnailId: 'second', assetId: 101}];
+  const client = homeAnalytics('123', credentials.key);
+  assert.deepEqual((await client.scores(candidates, new Date(started), new Date(), 'OneHour', 0, false))
+    .map(row => row.impressions), [12_000, 12_000]);
+  assert.deepEqual((await client.scores(candidates, new Date(started), new Date(), 'OneHour'))
+    .map(row => row.impressions), [0, 0]);
+  globalThis.fetch = dashboardFetch;
 
   const elements = new Map();
   const element = (id = Symbol()) => {

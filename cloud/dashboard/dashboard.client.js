@@ -135,7 +135,7 @@ function drawTrend() {
   }
 }
 
-function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) {
+function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours, autopilot}) {
   const low = rows.length ? Math.min(...rows.map(row => row.impressions)) : 0;
   const ready = low >= minimum;
   const leader = ready && rows[0]?.qualifiedPlayRate > rows.at(-1)?.qualifiedPlayRate ? rows[0] : null;
@@ -146,7 +146,7 @@ function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) 
       : !ready ? 'Waiting for impressions' : leader ? 'Eligible for a challenger' : 'Waiting to break a tie';
   get('checked').textContent = `Updated ${localTime(checkedAt)}`;
   get('window').textContent = new Date(windowStart) < new Date(windowEnd)
-    ? `Shared reporting hours from ${localTime(windowStart)} to ${localTime(windowEnd)}`
+    ? `${autopilot ? 'Reporting hours' : 'Shared reporting hours'} from ${localTime(windowStart)} to ${localTime(windowEnd)}`
     : 'Waiting for the first full reporting hour.';
   get('scores').replaceChildren(...rows.map((row, index) => {
     const tr = document.createElement('tr');
@@ -178,7 +178,7 @@ function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) 
   chartRows(get('impressions'), rows, 'Progress to the impression minimum', minimum, row => row.impressions,
     value => `${numbers.format(value)} / ${numbers.format(minimum)}`, leader);
   get('trend-card').hidden = !rows.some(row => row.timeline?.length);
-  get('trend-timezone').textContent = trendHours === 24 ? 'By UTC day · Shared reporting hours only' : 'By local hour · Shared reporting hours only';
+  get('trend-timezone').textContent = `${trendHours === 24 ? 'By UTC day' : 'By local hour'}${autopilot ? '' : ' · Shared reporting hours only'}`;
   get('trend-legend').replaceChildren(...rows.map((row, index) => {
     const item = document.createElement('li'), dot = document.createElement('span');
     dot.textContent = '●';

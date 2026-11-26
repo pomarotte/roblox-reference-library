@@ -100,19 +100,21 @@ export function homeAnalytics(universe, key) {
     ]));
   }
 
-  async function scores(candidates, start, end, granularity, trendHours = 0) {
+  async function scores(candidates, start, end, granularity, trendHours = 0, shared = true) {
     const assetIds = candidates.map(item => String(item.assetId));
     const [impressions, plays] = await Promise.all(['ThumbnailImpressions', 'ThumbnailQualifiedPlays'].map(metric =>
       thumbnailMetric(metric, start.toISOString(), end.toISOString(), assetIds, granularity)));
-    const buckets = [...(impressions.get(assetIds[0])?.keys() || [])].filter(time => {
+    const bucketsFor = ids => [...(impressions.get(ids[0])?.keys() || [])].filter(time => {
       const timestamp = Date.parse(time);
-      return timestamp >= +start && timestamp < +end && assetIds.every(id => {
+      return timestamp >= +start && timestamp < +end && ids.every(id => {
         const views = impressions.get(id)?.get(time), qualified = plays.get(id)?.get(time);
         return views > 0 && qualified >= 0 && qualified <= views;
       });
     }).sort((a, b) => Date.parse(a) - Date.parse(b));
+    const sharedBuckets = shared ? bucketsFor(assetIds) : null;
     return candidates.map(variant => {
       const id = String(variant.assetId);
+      const buckets = sharedBuckets || bucketsFor([id]);
       const timeline = new Map();
       let views = 0, qualifiedPlays = 0;
       for (const time of buckets) {

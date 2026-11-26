@@ -50,14 +50,16 @@ export async function serveDashboard(request, env, ctx, assets) {
   catch { return json({error: 'Invalid connection request.'}, 400); }
   let {universe, key, activatedAt} = data || {};
   let minimum = rotationMinimum;
+  let autopilot = false;
   if (key == null && typeof universe === 'string' && /^[1-9]\d{0,19}$/.test(universe) && env.AUTOPILOT_ENCRYPTION_KEY) {
     const identity = await ctx.access.getIdentity();
     if (!identity?.email) return json({error: 'Sign in with your authorized email address.'}, 403);
     try {
       const saved = await autopilotConnection(env, identity.email.toLowerCase(), universe);
       key = saved?.key;
+      autopilot = Boolean(saved);
       minimum = saved?.minimum ?? minimum;
-      if (!activatedAt && saved?.since) activatedAt = new Date(Math.max(Date.parse(saved.since), Date.now() - 28 * 24 * hour)).toISOString();
+      if (!activatedAt && saved) activatedAt = new Date(Date.now() - 28 * 24 * hour).toISOString();
     } catch {
       return json({error: 'The saved game connection is unavailable.'}, 503);
     }
@@ -80,13 +82,13 @@ export async function serveDashboard(request, env, ctx, assets) {
     const previews = robloxImages(active.map(item => item.assetId), 5000).catch(() => new Map());
     const trendHours = end - start <= 48 * hour ? 1 : 24;
     const metrics = start < end && active.length
-      ? await scores(active, start, end, 'OneHour', trendHours)
+      ? await scores(active, start, end, 'OneHour', trendHours, !autopilot)
       : active.map(item => ({homeId: item.homepageThumbnailId, assetId: String(item.assetId),
         impressions: 0, qualifiedPlays: 0, qualifiedPlayRate: null, timeline: []}));
     const images = await previews;
     const rows = metrics.map(row => ({...row, image: images.get(row.assetId)}));
     return json({universe, activatedAt: startTime, windowStart: start.toISOString(), windowEnd: end.toISOString(),
-      checkedAt: new Date(now).toISOString(), minimum, trendHours, rows});
+      checkedAt: new Date(now).toISOString(), minimum, trendHours, rows, autopilot});
   } catch (error) {
     if (/HTTP (401|403) /.test(error.message)) {
       return json({error: 'Roblox denied access. Check the key, Universe ID, and thumbnail and analytics read permissions.'}, 403);

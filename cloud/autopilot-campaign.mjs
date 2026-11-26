@@ -207,12 +207,12 @@ async function testBatch(env, game, batch, roblox, save) {
     return 15 * minute;
   }
   const now = Date.now();
-  const since = Math.max(Date.parse(game.since), now - 28 * 24 * hour);
+  const since = now - 28 * 24 * hour;
   const {start, end} = reportingWindow(new Date(since).toISOString(), now);
-  const rows = start < end ? await roblox.scores(activeThumbnails(config), start, end, 'OneHour') : [];
+  const rows = start < end ? await roblox.scores(activeThumbnails(config), start, end, 'OneHour', 0, false) : [];
   game.measurements = rows;
   if (!recordResults(batch, rows, game.minimum)) {
-    game.problem = 'Collecting data for all five thumbnails in shared reporting hours.';
+    game.problem = 'Waiting for each thumbnail to reach the impression minimum in the past 28 days.';
     return 30 * minute;
   }
   if (batch.items.every(item => terminal.has(item.stage))) {
