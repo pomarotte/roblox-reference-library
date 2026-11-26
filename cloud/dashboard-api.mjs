@@ -48,12 +48,14 @@ export async function serveDashboard(request, env, ctx, assets) {
   try { data = await request.json(); }
   catch { return json({error: 'Invalid connection request.'}, 400); }
   let {universe, key, activatedAt} = data || {};
+  let minimum = rotationMinimum;
   if (key == null && typeof universe === 'string' && /^[1-9]\d{0,19}$/.test(universe) && env.AUTOPILOT_ENCRYPTION_KEY) {
     const identity = await ctx.access.getIdentity();
     if (!identity?.email) return json({error: 'Sign in with your authorized email address.'}, 403);
     try {
       const saved = await autopilotConnection(env, identity.email.toLowerCase(), universe);
       key = saved?.key;
+      minimum = saved?.minimum ?? minimum;
       if (!activatedAt && saved?.since) activatedAt = new Date(Math.max(Date.parse(saved.since), Date.now() - 28 * 24 * hour)).toISOString();
     } catch {
       return json({error: 'The saved game connection is unavailable.'}, 503);
@@ -80,7 +82,7 @@ export async function serveDashboard(request, env, ctx, assets) {
       : active.map(item => ({homeId: item.homepageThumbnailId, assetId: String(item.assetId),
         impressions: 0, qualifiedPlays: 0, qualifiedPlayRate: null, timeline: []}));
     return json({universe, activatedAt: startTime, windowStart: start.toISOString(), windowEnd: end.toISOString(),
-      checkedAt: new Date(now).toISOString(), minimum: rotationMinimum, trendHours, rows});
+      checkedAt: new Date(now).toISOString(), minimum, trendHours, rows});
   } catch (error) {
     if (/HTTP (401|403) /.test(error.message)) {
       return json({error: 'Roblox denied access. Check the key, Universe ID, and thumbnail and analytics read permissions.'}, 403);

@@ -105,8 +105,9 @@ Choose the pool size (10 by default) and round limit. Autopilot generates the re
 
 When a batch is ready, follow the review email or open the game tab. Inspect the final images,
 edit or regenerate individual drafts, select the ones you approve, and submit them for Roblox moderation.
-Autopilot keeps five thumbnails active by swapping one at a time, after every live thumbnail has
-10,000 impressions in shared reporting hours. If the game has fewer than five active thumbnails,
+Autopilot keeps five thumbnails active by swapping one at a time after each live thumbnail meets
+the game's **Minimum impressions per thumbnail** in shared reporting hours. The default is 10,000.
+If the game has fewer than five active thumbnails,
 the campaign waits until enough approved thumbnails are available to fill all five slots.
 After testing the pool, it generates the next round from up to three leading thumbnails and waits for
 approval again. Each game advances in the background and can be paused from its own tab.

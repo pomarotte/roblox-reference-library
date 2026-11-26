@@ -1,4 +1,4 @@
-import {homeAnalytics, homeIds, sameSet} from './home-analytics.mjs';
+import {homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
 import {describeDraft, findReferences, imageKey, readJson, storageKey, storeImage} from './autopilot-services.mjs';
 
@@ -25,7 +25,8 @@ export async function autopilotConnection(env, owner, universe) {
   const row = await lookup(env.WATCH_ACTIVITY, owner, universe);
   if (!row) return null;
   const game = JSON.parse(row.state);
-  return {key: await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, owner, universe, row.secret, true), since: game.since};
+  return {key: await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, owner, universe, row.secret, true), since: game.since,
+    minimum: game.minimum ?? rotationMinimum};
 }
 
 async function lease(db, owner, universe) {
@@ -59,7 +60,7 @@ function summary(game) {
 
 function publicGame(game) {
   const {swap, ...view} = game;
-  return view;
+  return {...view, minimum: view.minimum ?? rotationMinimum};
 }
 
 async function connect(db, env, owner, universe, body) {
@@ -137,6 +138,9 @@ async function updateGame(request, env, row, game, url, body) {
         candidate.homeId === item.homeId), 'Choose an available thumbnail that is not already in the pool.');
       game.starting.push({...item, id: crypto.randomUUID(), existing: true, stage: 'draft'});
     }
+  } else if (action === 'minimum') {
+    requireInput(Number.isSafeInteger(body.minimum) && body.minimum > 0, 'Enter a positive whole number of impressions.');
+    game.minimum = body.minimum;
   } else if (action === 'start') {
     requireInput(editablePool(batch), 'Finish the current campaign before starting a new one.');
     requireInput(Number.isInteger(body.target) && body.target >= Math.max(1, game.starting.length) && body.target <= 10 &&
@@ -244,7 +248,8 @@ export async function autopilotApi(request, env, owner) {
       const game = JSON.parse(row.state);
       await updateGame(request, env, row, game, url, body);
       const batch = batchOf(game);
-      const reschedule = ['start', 'approve', 'regenerate', 'resume', 'recover', 'sync', 'key'].includes(body.action);
+      const reschedule = ['start', 'approve', 'regenerate', 'resume', 'recover', 'sync', 'key'].includes(body.action) ||
+        (body.action === 'minimum' && batch?.phase === 'testing' && row.next_check !== null);
       const next = game.paused || !batch || batch.phase === 'complete' ? null
         : reschedule ? Date.now() : row.next_check;
       await saveGame(db, row, game, next);

@@ -162,7 +162,7 @@ try {
   assert.equal(element('performance').hidden, true);
 
   const openBatch = 'batch-to-review';
-  const savedGame = {universe: '456', name: 'Second game', brief: {description: 'A racing game', assets: [], references: []},
+  const savedGame = {universe: '456', name: 'Second game', minimum: 10_000, brief: {description: 'A racing game', assets: [], references: []},
     suggestions: [], starting: [], active: [], library: [], batches: [{id: openBatch, phase: 'review', number: 1,
       items: [{id: 'draft-1', label: 'Draft 1', stage: 'draft', imageReady: true}]}]};
   const legacyFetch = browser.fetch;
@@ -174,7 +174,12 @@ try {
         games: [{universe: '123', name: 'First game'}, {universe: '456', name: 'Second game', review: true}]});
       if (path === '/api/autopilot?game=456') {
         if (!options) return Response.json(savedGame);
-        approvals.push(JSON.parse(options.body));
+        const command = JSON.parse(options.body);
+        if (command.action === 'minimum') {
+          savedGame.minimum = command.minimum;
+          return Response.json(savedGame);
+        }
+        approvals.push(command);
         return Response.json({...savedGame, batches: [{...savedGame.batches[0], phase: 'testing'}]});
       }
       return legacyFetch(path, options);
@@ -184,6 +189,11 @@ try {
   await new Promise(resolve => setImmediate(resolve));
   assert.match(element('game-tabs').children[1].textContent, /Second game · Review ready/);
   assert.match(element('autopilot-review-heading').textContent, /Second game · Round 1/);
+  assert.equal(element('autopilot-minimum').value, '10000');
+  Object.assign(element('autopilot-minimum'), {value: '20000', valueAsNumber: 20_000});
+  await element('autopilot-minimum-form').listeners.submit({preventDefault() {}});
+  assert.equal(savedGame.minimum, 20_000);
+  assert.equal(element('traffic').textContent, '15,000 / 20,000');
   assert.equal(element('autopilot-approve').disabled, true);
   const checkbox = element('autopilot-drafts').children[0].children.find(node => node.tagName === 'label').children[0];
   checkbox.checked = true;

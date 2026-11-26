@@ -145,6 +145,15 @@ try {
   assert.equal((await endpoint('game=123', {method: 'POST', headers: {Origin: 'https://unrelated.test'}})).status, 403);
   await action('connect', {name: 'Cart park', key: 'example-key'});
   await action('connect', {name: 'Different game', key: 'example-key'}, '456');
+  assert.equal((await game()).minimum, 10_000);
+  assert.equal((await post('minimum', {minimum: 0})).status, 400);
+  assert.equal((await post('minimum', {minimum: 1.5})).status, 400);
+  await action('minimum', {minimum: 13_000});
+  assert.equal((await success(await endpoint('game=456'))).minimum, 10_000);
+  const performance = await success(await serveDashboard(new Request(origin + '/api/performance', {
+    method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: '{"universe":"123"}'
+  }), env, user(), {}));
+  assert.equal(performance.minimum, 13_000);
   assert.equal((await endpoint('game=123', undefined, user('other@example.com'))).status, 404);
   assert.ok(!JSON.stringify(await game()).includes('example-key'));
   assert.ok(!sqlite.prepare("SELECT secret FROM autopilot_games WHERE universe = '123'").get().secret.includes('example-key'));
@@ -194,6 +203,9 @@ try {
   await tick();
   assert.equal(swaps.length, 0, 'Paused campaigns do not rotate');
   await action('resume');
+  await tick();
+  assert.equal(swaps.length, 0, '12,000 impressions do not pass a saved minimum of 13,000');
+  await action('minimum', {minimum: 12_000});
   for (let attempt = 0; attempt < 24; attempt++) await tick();
   assert.equal(swaps.length, 10);
   assert.ok(active.includes('base'));

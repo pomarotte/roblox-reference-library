@@ -106,7 +106,7 @@
     const ticket = selection;
     try {
       const view = await api(game.universe);
-      if (selection === ticket && !busy) render(view);
+      if (selection === ticket && !busy) renderAutopilot(view);
     } catch (error) {
       if (selection === ticket && !busy) status.textContent = error.message;
     }
@@ -139,7 +139,7 @@
     try {
       const view = await api(entry.universe);
       if (selection !== ticket) return;
-      render(view);
+      renderAutopilot(view);
       if (round && round === requestedBatch) get('autopilot-review-heading').focus();
       requestedGame = requestedBatch = null;
     } catch (error) {
@@ -170,7 +170,7 @@
       if (['start', 'approve', 'regenerate'].includes(action)) reviewSet.clear();
       if (['brief', 'references'].includes(action)) briefVersion = undefined;
       status.textContent = action === 'approve' ? 'Approved. Autopilot will submit the selected images.' : '';
-      render(view);
+      renderAutopilot(view);
       refreshTabs().catch(() => {});
       if (action === 'key') {
         get('autopilot-key-input').value = '';
@@ -321,7 +321,10 @@
     get('autopilot-approve').disabled = !reviewSet.size;
   }
 
-  function render(view) {
+  function renderAutopilot(view) {
+    const minimum = get('autopilot-minimum');
+    if (!game || minimum.value === minimum.defaultValue) minimum.value = String(view.minimum);
+    minimum.defaultValue = String(view.minimum);
     game = view;
     const current = game.batches.at(-1);
     const editable = !current || current.phase === 'complete';
@@ -396,6 +399,17 @@
     if (await act('image', {}, file, {type: 'starting', name: file.name.slice(0, 80)})) event.target.reset();
   });
   get('autopilot-load-library').addEventListener('click', () => act('library'));
+  get('autopilot-minimum-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const field = get('autopilot-minimum'), minimum = field.valueAsNumber;
+    if (await act('minimum', {minimum})) {
+      status.textContent = 'Impression minimum saved.';
+      if (connection?.data) {
+        connection.data.minimum = minimum;
+        render(connection.data);
+      }
+    }
+  });
   get('autopilot-start-form').addEventListener('submit', event => {
     event.preventDefault();
     act('start', {target: Number(get('autopilot-target').value), rounds: Number(get('autopilot-rounds').value)});
@@ -403,7 +417,7 @@
   get('autopilot-batches').addEventListener('change', event => {
     round = event.target.value;
     showBatchLink(game.universe, round);
-    render(game);
+    renderAutopilot(game);
   });
   get('autopilot-approve').addEventListener('click', () =>
     act('approve', {batch: game.batches.at(-1).id, ids: [...reviewSet]}));

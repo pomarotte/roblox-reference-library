@@ -74,6 +74,11 @@
         <p id="autopilot-progress"></p>
         <div id="autopilot-live" class="thumbnail-grid" aria-label="Active thumbnails"></div>
         <div class="actions" id="autopilot-controls"></div>
+        <form id="autopilot-minimum-form" class="actions" aria-describedby="autopilot-minimum-help">
+          <label>Minimum impressions per thumbnail<input id="autopilot-minimum" type="number" min="1" step="1" required></label>
+          <button type="submit" class="secondary">Save minimum</button>
+          <span id="autopilot-minimum-help" class="muted">Once all five slots are filled, each thumbnail must reach this count in shared reporting hours before a swap.</span>
+        </form>
         <details id="autopilot-brief">
           <summary>Creative brief and game assets</summary>
           <form id="autopilot-brief-form">

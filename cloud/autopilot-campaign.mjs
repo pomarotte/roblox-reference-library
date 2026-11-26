@@ -20,8 +20,8 @@ export function createBatch(game, parents = [], startingRound = false) {
   return batch;
 }
 
-export function recordResults(batch, rows) {
-  if (rows.length !== 5 || rows.some(row => row.impressions < rotationMinimum || row.qualifiedPlayRate === null)) {
+export function recordResults(batch, rows, minimum = rotationMinimum) {
+  if (rows.length !== 5 || rows.some(row => row.impressions < minimum || row.qualifiedPlayRate === null)) {
     return false;
   }
   const base = rows.find(row => row.homeId === batch.baseline) || rows[0];
@@ -211,7 +211,7 @@ async function testBatch(env, game, batch, roblox, save) {
   const {start, end} = reportingWindow(new Date(since).toISOString(), now);
   const rows = start < end ? await roblox.scores(activeThumbnails(config), start, end, 'OneHour') : [];
   game.measurements = rows;
-  if (!recordResults(batch, rows)) {
+  if (!recordResults(batch, rows, game.minimum)) {
     game.problem = 'Collecting data for all five thumbnails in shared reporting hours.';
     return 30 * minute;
   }
