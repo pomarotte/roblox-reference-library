@@ -62,7 +62,7 @@ async function checkedFetch(url, options = {}, timeout = 20_000) {
 async function remoteImage(url) {
   if (!cdnImage(url)) throw new Error('The Roblox thumbnail URL is unavailable.');
   const response = await checkedFetch(url);
-  const mimeType = response.headers.get('Content-Type')?.split(';')[0];
+  const mimeType = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase();
   if (!imageTypes.includes(mimeType)) throw new Error('The Roblox thumbnail format is unsupported.');
   return {mimeType, data: base64(await readLimited(response.body, 1_500_000))};
 }

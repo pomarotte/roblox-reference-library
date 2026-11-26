@@ -118,7 +118,7 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   }
   if (hostname === 'tr.rbxcdn.com') {
     referenceDownloads.push(url);
-    return new Response(image, {headers: {'Content-Type': contentType}});
+    return new Response(image, {headers: {'Content-Type': 'image/Webp'}});
   }
   if (pathname === '/search-api/omni-search') {
     assert.equal(searchParams.get('searchQuery'), 'Cart Championship');

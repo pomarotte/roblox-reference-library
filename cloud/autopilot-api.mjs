@@ -217,7 +217,7 @@ async function updateGame(request, env, row, game, url, body) {
   } else if (action === 'regenerate') {
     const item = batch?.items.find(candidate => candidate.id === body.id);
     const description = clean(body.description, 6000);
-    requireInput(batch?.id === body.batch && batch.phase === 'review' && item && !item.existing &&
+    requireInput(batch?.id === body.batch && ['review', 'generating'].includes(batch.phase) && item && !item.existing &&
       ['draft', 'generationFailed'].includes(item.stage) && description, 'Open the current draft and enter a generation description.');
     item.description = description;
     item.id = crypto.randomUUID();

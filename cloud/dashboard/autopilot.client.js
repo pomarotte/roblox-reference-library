@@ -347,6 +347,7 @@
   function renderDrafts(view, current) {
     const displayed = view.batches.find(batch => batch.id === round) || current;
     const canReview = displayed === current && current?.phase === 'review' && !view.paused;
+    const canRetry = displayed === current && ['review', 'generating'].includes(current?.phase) && !view.paused;
     get('autopilot-review').hidden = !displayed;
     if (!displayed) return;
     const select = get('autopilot-batches');
@@ -357,7 +358,7 @@
     }
     select.value = displayed.id;
     get('autopilot-review-heading').textContent = `${view.name} · Round ${displayed.number}${canReview ? ' · Review batch' : ''}`;
-    const fingerprint = JSON.stringify([displayed.id, displayed.items, canReview, view.active]);
+    const fingerprint = JSON.stringify([displayed.id, displayed.items, canReview, canRetry, view.active]);
     if (cardsVersion !== fingerprint) {
       cardsVersion = fingerprint;
       get('autopilot-drafts').replaceChildren(...displayed.items.map(item => {
@@ -393,7 +394,7 @@
         if (item.description) {
           const details = el('details'), instructions = el('textarea');
           details.append(el('summary', 'Generation description'));
-          if (canReview && ['draft', 'generationFailed'].includes(item.stage)) {
+          if (canRetry && (item.stage === 'generationFailed' || canReview && item.stage === 'draft')) {
             instructions.value = editedDescriptions.get(item.id) || item.description;
             instructions.rows = 7;
             instructions.maxLength = 6000;
