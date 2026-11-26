@@ -200,6 +200,13 @@ try {
           savedGame.minimum = command.minimum;
           return Response.json(savedGame);
         }
+        if (command.action === 'references') {
+          if (command.description === 'Unavailable') return Response.json({error: 'Catalogue unavailable.'}, {status: 502});
+          savedGame.suggestions = command.description === 'No matches' ? [] : [
+            {id: '789', name: 'Similar racing game', image: previewUrl(102)}
+          ];
+          return Response.json(savedGame);
+        }
         approvals.push(command);
         return Response.json({...savedGame, batches: [{...savedGame.batches[0], phase: 'testing'}]});
       }
@@ -215,6 +222,16 @@ try {
   await element('autopilot-minimum-form').listeners.submit({preventDefault() {}});
   assert.equal(savedGame.minimum, 20_000);
   assert.equal(element('traffic').textContent, '15,000 / 20,000');
+  await element('autopilot-find').listeners.click();
+  assert.match(element('autopilot-reference-status').textContent, /Found 1 similar game/);
+  assert.equal(element('autopilot-reference-list').children.length, 1);
+  element('autopilot-description').value = 'No matches';
+  await element('autopilot-find').listeners.click();
+  assert.match(element('autopilot-reference-status').textContent, /No similar games found/);
+  element('autopilot-description').value = 'Unavailable';
+  await element('autopilot-find').listeners.click();
+  assert.equal(element('autopilot-reference-status').textContent, 'Catalogue unavailable.');
+  assert.equal(element('autopilot-find').disabled, false);
   assert.equal(element('autopilot-approve').disabled, true);
   const checkbox = element('autopilot-drafts').children[0].children.find(node => node.tagName === 'label').children[0];
   checkbox.checked = true;

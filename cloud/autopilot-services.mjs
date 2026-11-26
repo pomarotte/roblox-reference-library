@@ -1,4 +1,4 @@
-const chartsUrl = 'https://pomarotte.github.io/roblox-reference-library/cloud/data/charts.json';
+const chartsUrl = 'https://www.rolibrary.win/data/charts.json';
 const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-nano-banana-2.1:generateContent';
 export const imageLimit = 3_000_000;
 const imageTypes = ['image/jpeg', 'image/png', 'image/webp'];

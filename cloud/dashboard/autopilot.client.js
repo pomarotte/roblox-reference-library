@@ -1,6 +1,7 @@
 'use strict';
 (() => {
   const section = get('autopilot'), status = get('autopilot-status');
+  const referenceStatus = get('autopilot-reference-status');
   const reviewSet = new Set(), editedDescriptions = new Map();
   const params = new URLSearchParams(location.search);
   let requestedGame = params.get('game'), requestedBatch = params.get('batch');
@@ -127,6 +128,7 @@
     briefVersion = cardsVersion = libraryVersion = liveVersion = infoVersion = batchOptions = undefined;
     reviewSet.clear();
     editedDescriptions.clear();
+    referenceStatus.textContent = '';
     get('autopilot-game').hidden = true;
     get('autopilot-key').hidden = Boolean(entry?.stored);
     section.hidden = !entry;
@@ -155,9 +157,12 @@
   async function act(action, payload = {}, file, query) {
     if (!selected || busy) return false;
     const ticket = selection, universe = selected;
+    const searching = action === 'references';
+    const feedback = searching ? referenceStatus : status;
     busy = true;
     section.setAttribute('aria-busy', 'true');
-    status.textContent = 'Saving…';
+    feedback.textContent = searching ? 'Searching the Roblox catalogue…' : 'Saving…';
+    if (searching) get('autopilot-find').disabled = true;
     try {
       const view = await api(universe, {action, ...payload}, file, query);
       if (selection !== ticket) return false;
@@ -176,6 +181,12 @@
       if (['brief', 'references'].includes(action)) briefVersion = undefined;
       status.textContent = action === 'approve' ? 'Approved. Autopilot will submit the selected images.' : '';
       renderAutopilot(view);
+      if (searching) {
+        const count = view.suggestions.length;
+        feedback.textContent = count
+          ? `Found ${count} ${count === 1 ? 'similar game' : 'similar games'}. Select up to three thumbnails, then click Save brief.`
+          : 'No similar games found. Try including the genre or main gameplay mechanic in your description.';
+      }
       refreshTabs().catch(() => {});
       if (action === 'key') {
         get('autopilot-key-input').value = '';
@@ -184,11 +195,12 @@
       }
       return true;
     } catch (error) {
-      if (selection === ticket) status.textContent = error.message;
+      if (selection === ticket) feedback.textContent = error.message;
       return false;
     } finally {
       busy = false;
       section.removeAttribute('aria-busy');
+      if (searching) get('autopilot-find').disabled = false;
     }
   }
 

@@ -79,7 +79,8 @@ const originalFetch = fetch;
 globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   const {hostname, pathname, searchParams} = new URL(url);
   assert.equal(redirect, 'manual');
-  if (hostname === 'pomarotte.github.io') {
+  if (hostname === 'www.rolibrary.win') {
+    assert.equal(pathname, '/data/charts.json');
     return Response.json({genres: {Racing: {games: [
       {id: 456, name: 'Downhill Shopping Cart Racing', image: preview, genre: 'Racing'},
       {id: 789, name: 'My Farm', image: preview, genre: 'Simulation'}

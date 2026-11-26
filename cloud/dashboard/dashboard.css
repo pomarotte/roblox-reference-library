@@ -81,6 +81,8 @@ li { margin: .55rem 0; }
 #autopilot summary { cursor: pointer; }
 #autopilot h3 { margin: 1.2rem 0 .6rem; }
 #autopilot textarea { width: 100%; resize: vertical; padding: .55rem; color: inherit; background: #121216; border: 1px solid #454553; border-radius: 6px; font: inherit; }
+#autopilot-reference-status { margin: 0; }
+#autopilot-reference-status:empty, #autopilot-reference-list:empty { display: none; }
 .thumbnail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: .8rem; margin-block: .8rem; }
 .thumbnail-card { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: .45rem; padding: .65rem; border-radius: 8px; border: 1px solid #454553; background: #16161c; overflow-wrap: anywhere; }
 .thumbnail-card img, .preview-missing { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #121216; border-radius: 4px; }
