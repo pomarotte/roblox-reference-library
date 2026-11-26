@@ -72,7 +72,8 @@ def make_charts(games):
         subgenre = game.get('genre_l2')
         entry = {'id': game['id'], 'name': game['name'], 'place': game['rootPlaceId'],
                  'players': game['playing'], 'visits': game.get('visits'), 'genre': genre,
-                 'subgenre': subgenre, 'image': game.get('thumbnail')}
+                 'subgenre': subgenre, 'image': game.get('thumbnail'),
+                 'description': (game.get('description') or '')[:400]}
         if len(chart['games']) < 100:
             chart['games'].append(entry)
         if subgenre and subgenre.casefold() != 'unknown':

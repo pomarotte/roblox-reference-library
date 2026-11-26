@@ -1,9 +1,10 @@
 import {activeThumbnails, homeAnalytics, hour, reportingWindow, rotationMinimum} from './home-analytics.mjs';
 import {dashboardActivity, watchHost, watcherIngest} from './dashboard-activity.mjs';
+import {autopilotApi, autopilotConnection} from './autopilot-api.mjs';
 
 const headers = {
   'Cache-Control': 'no-store',
-  'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https://*.rbxcdn.com https://rbxcdn.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff'
 };
@@ -33,6 +34,11 @@ export async function serveDashboard(request, env, ctx, assets) {
     try { return await dashboardActivity(request, env.WATCH_ACTIVITY, identity.email.toLowerCase()); }
     catch { return json({error: 'Watcher activity is temporarily unavailable.'}, 503); }
   }
+  if (pathname === '/api/autopilot') {
+    const identity = await ctx.access.getIdentity();
+    return identity?.email ? autopilotApi(request, env, identity.email.toLowerCase())
+      : json({error: 'Sign in with your authorized email address.'}, 403);
+  }
   if (pathname !== '/api/performance') return json({error: 'Page not found.'}, 404);
   if (request.method !== 'POST') return json({error: 'Use POST.'}, 405);
   if (request.headers.get('Origin') !== origin || !request.headers.get('Content-Type')?.startsWith('application/json')) {
@@ -41,7 +47,18 @@ export async function serveDashboard(request, env, ctx, assets) {
   let data;
   try { data = await request.json(); }
   catch { return json({error: 'Invalid connection request.'}, 400); }
-  const {universe, key, activatedAt} = data || {};
+  let {universe, key, activatedAt} = data || {};
+  if (key == null && typeof universe === 'string' && /^[1-9]\d{0,19}$/.test(universe) && env.AUTOPILOT_ENCRYPTION_KEY) {
+    const identity = await ctx.access.getIdentity();
+    if (!identity?.email) return json({error: 'Sign in with your authorized email address.'}, 403);
+    try {
+      const saved = await autopilotConnection(env, identity.email.toLowerCase(), universe);
+      key = saved?.key;
+      if (!activatedAt && saved?.since) activatedAt = new Date(Math.max(Date.parse(saved.since), Date.now() - 28 * 24 * hour)).toISOString();
+    } catch {
+      return json({error: 'The saved game connection is unavailable.'}, 503);
+    }
+  }
   if (typeof universe !== 'string' || !/^[1-9]\d{0,19}$/.test(universe) ||
       typeof key !== 'string' || !/^[!-~]{1,1024}$/.test(key) ||
       (activatedAt != null && (typeof activatedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(activatedAt)))) {

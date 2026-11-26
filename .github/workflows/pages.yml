@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ROLIBRARY_ANALYTICS_ENABLED: ${{ vars.ROLIBRARY_ANALYTICS_ENABLED }}
+      ROLIBRARY_AUTOPILOT_ENABLED: ${{ vars.ROLIBRARY_AUTOPILOT_ENABLED }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -44,6 +45,7 @@ jobs:
       - run: node cloud/test-home-thumbnails.mjs
       - run: node cloud/test-dashboard.mjs
       - run: node cloud/test-dashboard-activity.mjs
+      - run: node cloud/test-autopilot.mjs
       - run: node test-cloud.cjs
         working-directory: cloud
       - run: python -m unittest test_web

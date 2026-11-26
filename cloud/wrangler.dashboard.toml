@@ -15,7 +15,17 @@ database_name = "rolibrary-watch-activity"
 database_id = "5302cd78-27cb-4009-8528-6a90eac4b5f9"
 migrations_dir = "dashboard-migrations"
 
+[[r2_buckets]]
+binding = "AUTOPILOT_MEDIA"
+bucket_name = "rolibrary-autopilot-private"
+
+[images]
+binding = "AUTOPILOT_IMAGES"
+
+[triggers]
+crons = ["*/2 * * * *"]
+
 [[rules]]
 type = "Text"
-globs = ["**/*.html", "**/*.css", "**/*.client.js"]
+globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/thumbnail-prompt.txt"]
 fallthrough = false

@@ -2,12 +2,12 @@ import {readFile, rename, stat, writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {basename} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {activeThumbnails, homeAnalytics, hour, reportingWindow, rotationMinimum} from './home-analytics.mjs';
+import {activeThumbnails, canActivate, homeAnalytics, homeIds, hour, reportingWindow, rotationMinimum, sameSet} from './home-analytics.mjs';
 
 const [universe, command, ...args] = process.argv.slice(2);
 const usage = 'Usage: node cloud/home-thumbnails.mjs UNIVERSE_ID upload APPROVED_FILES... | status | activate HOME_IDS... | rank START_DATE [MIN_IMPRESSIONS] | rotate START_TIME CHALLENGER_ID | watch START_TIME CHALLENGER_ID [12|24]';
 const key = process.env.ROBLOX_API_KEY;
-const {thumbnails, request, activeConfig, scores} = homeAnalytics(universe, key);
+const {thumbnails, request, activeConfig, listThumbnails, updateActive, scores} = homeAnalytics(universe, key);
 
 async function upload(files) {
   if (files.length < 1 || files.length > 5) throw new Error('Pass 1–5 approved image downloads.');
@@ -41,24 +41,6 @@ async function upload(files) {
   throw new Error('Upload processing is still pending. Check Creator Dashboard or run status before retrying.');
 }
 
-async function listThumbnails() {
-  const items = [];
-  const cursors = new Set();
-  let cursor = '';
-  do {
-    if (cursors.has(cursor)) throw new Error('Roblox repeated a thumbnail page.');
-    cursors.add(cursor);
-    const page = await request(`${thumbnails}/thumbnails?${new URLSearchParams(cursor ? {nextCursor: cursor} : {})}`);
-    items.push(...page.homepageThumbnails);
-    cursor = page.nextCursor;
-  } while (cursor);
-  return items;
-}
-
-const sameSet = (a, b) => a.length === b.length && a.every(id => b.includes(id));
-const homeIds = config => activeThumbnails(config).map(item => item.homepageThumbnailId);
-const canActivate = item => item.moderationStatus === 'Approved' && item.homepageThumbnailStatus === 'Active';
-
 async function activate(ids, expected) {
   if (ids.length < 2 || ids.length > 5 || new Set(ids).size !== ids.length) {
     throw new Error('Pass 2–5 distinct Home thumbnail IDs, including any existing thumbnail you want to keep.');
@@ -76,9 +58,7 @@ async function activate(ids, expected) {
   if (expected && (expected.id !== config?.id || !sameSet(current, homeIds(expected)))) {
     throw new Error('The active set changed during review. Check the latest thumbnails and start a new review.');
   }
-  await request(`${thumbnails}/personalization/${config ? 'update' : 'create'}`, {
-    json: config ? {id: config.id, homepageThumbnailIds: ids} : {homepageThumbnailIds: ids}
-  });
+  await updateActive(ids, config);
   for (let attempt = 0; attempt < 5; attempt++) {
     if (sameSet(ids, homeIds(await activeConfig()))) {
       console.log(`Home personalization active for universe ${universe}: ${ids.join(', ')}`);

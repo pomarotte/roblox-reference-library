@@ -6,6 +6,7 @@
   <title>Thumbnail Analytics · RoLibrary</title>
   <link rel="stylesheet" href="/dashboard.css">
   <script src="/dashboard.js" defer></script>
+  <script src="/autopilot.js" defer></script>
 </head>
 <body>
   <header><a href="https://pomarotte.github.io/roblox-reference-library/">RoLibrary</a><span id="account"></span><a href="/cdn-cgi/access/logout">Sign out</a></header>
@@ -13,11 +14,11 @@
     <h1>Thumbnail analytics</h1>
     <section aria-labelledby="connection-title">
       <h2 id="connection-title">Roblox experiences</h2>
-      <div id="game-switcher" class="actions" hidden>
-        <label for="games">Selected game</label>
-        <select id="games"><option value="">Add a game</option></select>
-        <button id="add-game" class="secondary" type="button">Add another game</button>
-      </div>
+      <nav id="game-switcher" class="actions game-tabs" aria-label="Games" hidden>
+        <div id="game-tabs" class="actions"></div>
+        <select id="games" hidden aria-label="Selected game"><option value="">Add a game</option></select>
+        <button id="add-game" class="secondary" type="button">+ Add game</button>
+      </nav>
       <form id="connection" autocomplete="off">
         <label>Universe ID<input id="universe" inputmode="numeric" pattern="[1-9][0-9]{0,19}" required></label>
         <label>Game name (optional)<input id="game-name" maxlength="60" placeholder="For the game switcher"></label>
@@ -26,9 +27,9 @@
           <a class="field-help" href="https://create.roblox.com/dashboard/credentials?activeTab=ApiKeysTab" target="_blank" rel="noopener noreferrer">Get an Open Cloud key ↗</a>
         </div>
         <label>Last activation time <small>(local time)</small><input id="activated" type="datetime-local"></label>
-        <div class="actions"><button id="refresh" type="submit">Connect and load</button><button id="disconnect" class="secondary" type="button" hidden>Disconnect this game</button></div>
+        <div class="actions"><button id="refresh" type="submit">Connect and load</button><button id="connect-direct" class="secondary" type="button" hidden>Connect Autopilot</button><button id="disconnect" class="secondary" type="button" hidden>Disconnect this game</button></div>
       </form>
-      <p class="muted">Give each game its Universe ID and a key with thumbnail and analytics read access. Reloading or leaving this page clears the connections. After a rotation, enter the last activation time to compare the current set.</p>
+      <p id="connection-help" class="muted">Connect with a Universe ID and a key with thumbnail and analytics read access. Temporary connections clear when you leave this page.</p>
       <p id="connection-status" role="status"></p>
     </section>
     <section id="performance" aria-labelledby="performance-title" hidden>
@@ -61,6 +62,57 @@
         <thead><tr><th scope="col">Home thumbnail</th><th scope="col">Impressions</th><th scope="col">Qualified plays</th><th scope="col">Qualified play rate</th></tr></thead>
         <tbody id="scores"></tbody>
       </table></div></details>
+    </section>
+    <section id="autopilot" aria-labelledby="autopilot-title" hidden>
+      <div class="section-header"><h2 id="autopilot-title">Thumbnail Autopilot</h2><p id="autopilot-status" class="muted" role="status"></p></div>
+      <form id="autopilot-key" autocomplete="off">
+        <label>Game name<input id="autopilot-name" maxlength="60" required></label>
+        <label>Roblox Open Cloud key<input id="autopilot-key-input" type="password" maxlength="1024" required></label>
+        <div class="actions"><button id="autopilot-connect" type="submit">Connect Autopilot</button><span class="muted">Requires thumbnail read and write and analytics read access. The key is encrypted for background runs.</span></div>
+      </form>
+      <div id="autopilot-game" hidden>
+        <p id="autopilot-progress"></p>
+        <div id="autopilot-live" class="thumbnail-grid" aria-label="Active thumbnails"></div>
+        <div class="actions" id="autopilot-controls"></div>
+        <details id="autopilot-brief">
+          <summary>Creative brief and game assets</summary>
+          <form id="autopilot-brief-form">
+            <label class="full-width">What do players do, and what should the thumbnails show?<textarea id="autopilot-description" rows="4" maxlength="1800" required></textarea></label>
+            <div class="actions"><button class="secondary" id="autopilot-find" type="button">Find similar games</button><button type="submit">Save brief</button></div>
+            <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Similar-game thumbnail references"></div>
+          </form>
+          <form id="autopilot-asset-form">
+            <label>Asset name<input id="autopilot-asset-name" maxlength="80" required></label>
+            <label>Use as<select id="autopilot-asset-kind"><option>Character</option><option>Environment</option><option>Prop</option><option>Logo</option><option>Gameplay screenshot</option></select></label>
+            <label>Game asset image<input id="autopilot-asset-file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+            <div class="actions"><label class="check-label"><input id="autopilot-asset-required" type="checkbox">Must include</label><button class="secondary" type="submit">Add game asset</button></div>
+          </form>
+          <div class="thumbnail-grid" id="autopilot-assets" aria-label="Game assets"></div>
+        </details>
+        <div id="autopilot-pool" hidden>
+          <h3>Starting thumbnails</h3>
+          <div class="thumbnail-grid" id="autopilot-starting" aria-label="Starting thumbnails"></div>
+          <form id="autopilot-upload-form">
+            <label>Upload a finished thumbnail<input id="autopilot-upload-file" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+            <div class="actions"><button class="secondary" type="submit">Add to starting pool</button></div>
+          </form>
+          <details id="autopilot-library">
+            <summary>Pick from Roblox thumbnail history</summary>
+            <p><button id="autopilot-load-library" class="secondary" type="button">Refresh thumbnail history</button></p>
+            <div class="thumbnail-grid" id="autopilot-library-list"></div>
+          </details>
+          <form id="autopilot-start-form">
+            <label>Thumbnails per round<input id="autopilot-target" type="number" min="1" max="10" value="10" required></label>
+            <label>Round limit<input id="autopilot-rounds" type="number" min="1" max="10" value="3" required></label>
+            <div class="actions"><button type="submit">Start Autopilot</button><span class="muted">RoLibrary generates any remaining drafts and emails you when the batch is ready for review.</span></div>
+          </form>
+        </div>
+        <div id="autopilot-review" hidden>
+          <div class="section-header"><h3 id="autopilot-review-heading" tabindex="-1">Thumbnail batches</h3><label>Round<select id="autopilot-batches"></select></label></div>
+          <div id="autopilot-drafts" class="thumbnail-grid"></div>
+          <p id="autopilot-approval" hidden><button id="autopilot-approve" type="button" disabled>Submit approved thumbnails</button></p>
+        </div>
+      </div>
     </section>
     <section aria-labelledby="watch-title">
       <h2 id="watch-title">Rotation activity</h2>

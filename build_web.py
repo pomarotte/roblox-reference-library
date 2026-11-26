@@ -98,7 +98,13 @@ def build(cache, output, extend=None):
     html = html.replace('</head>', '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; img-src \'self\' blob: data: https://*.rbxcdn.com; script-src \'self\' \'wasm-unsafe-eval\' https://cdn.jsdelivr.net; style-src \'self\' \'unsafe-inline\'; connect-src \'self\' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com https://references.rolibrary.win https://*.rbxcdn.com https://*.roblox.com; worker-src \'self\' blob:; object-src \'none\'; base-uri \'self\'; form-action \'none\'">\n</head>')
     html = html.replace('</main>', '<p><a class="secondary" href="https://buymeacoffee.com/winpo1" target="_blank" rel="noopener noreferrer">Support RoLibrary ↗</a></p>\n</main>', 1)
     generator = (HERE / 'web' / 'generator.html').read_text(encoding='utf-8')
-    if os.environ.get('ROLIBRARY_ANALYTICS_ENABLED') == 'true':
+    if os.environ.get('ROLIBRARY_AUTOPILOT_ENABLED') == 'true':
+        generator = generator.replace('<details id="thumbnail-test">',
+            '<p><a href="https://analytics.rolibrary.win/" target="_blank" rel="noopener noreferrer">Open Thumbnail Autopilot in Analytics ↗</a></p>\n'
+            '<details id="thumbnail-test" hidden>')
+        html = html.replace('id="viewer-thumbnail-test" class="secondary" type="button" hidden>Draft Home thumbnails',
+                            'id="viewer-thumbnail-test" data-analytics class="secondary" type="button" hidden>Open in Thumbnail Analytics')
+    elif os.environ.get('ROLIBRARY_ANALYTICS_ENABLED') == 'true':
         generator = generator.replace('<summary>Roblox Home thumbnail test</summary>',
             '<summary>Roblox Home thumbnail test</summary>\n  '
             '<a href="https://analytics.rolibrary.win/" target="_blank" rel="noopener noreferrer">Open thumbnail analytics ↗</a>')

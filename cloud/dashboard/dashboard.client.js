@@ -163,34 +163,44 @@ function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) 
 function renderGames() {
   gameSelect.replaceChildren(new Option('Add a game', ''), ...[...games.values()].map(game =>
     new Option(game.name ? `${game.name} · ${game.universe}` : `Universe ${game.universe}`, game.universe)));
+  get('game-tabs').replaceChildren(...[...games.values()].map(game => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary';
+    button.textContent = `${game.name || `Universe ${game.universe}`}${game.review ? ' · Review ready' : ''}`;
+    if (connection?.universe === game.universe) button.setAttribute('aria-current', 'page');
+    button.addEventListener('click', () => selectGame(game.universe));
+    return button;
+  }));
   gameSelect.value = games.has(connection?.universe) ? connection.universe : '';
   get('game-switcher').hidden = !games.size;
 }
 
 async function loadPerformance() {
   if (!connection || activeRequest) return;
-  const {key, universe, activatedAt} = connection;
+  const {key, universe, activatedAt, stored} = connection;
   const request = activeRequest = new AbortController();
   refresh.disabled = true;
   status.textContent = 'Checking Roblox analytics…';
   try {
     const response = await fetch('/api/performance', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({key, universe, activatedAt}), signal: request.signal
+      body: JSON.stringify({key: stored ? undefined : key, universe, activatedAt}), signal: request.signal
     });
     const data = await responseData(response);
     if (activeRequest !== request) return;
     connection.data = data;
     games.set(universe, connection);
     renderGames();
-    disconnect.hidden = false;
+    disconnect.hidden = Boolean(stored);
     universeInput.readOnly = true;
     keyInput.required = false;
     render(data);
     status.textContent = '';
-    keyInput.placeholder = 'Connected for this tab';
+    keyInput.placeholder = stored ? 'Saved Autopilot connection' : 'Connected for this tab';
     refresh.textContent = 'Refresh analytics';
     updateActivity();
+    window.autopilotSelection?.(connection);
   } catch (error) {
     if (activeRequest === request) status.textContent = error.message;
   } finally {
@@ -210,13 +220,13 @@ form.addEventListener('submit', event => {
   const time = activationInput.value;
   const activatedAt = time === existing?.localActivation ? existing.activatedAt
     : time ? new Date(time).toISOString() : undefined;
-  if (!key) return;
+  if (!key && !existing?.stored) return;
   if (connection?.universe !== universe) {
     panel.hidden = true;
     get('scores').replaceChildren();
   }
   connection = {key, universe, activatedAt, localActivation: time, name: nameInput.value.trim(),
-    data: existing?.data, activity: existing?.activity};
+    data: existing?.data, activity: existing?.activity, stored: existing?.stored, review: existing?.review};
   keyInput.required = !existing;
   keyInput.value = '';
   loadPerformance();
@@ -233,11 +243,12 @@ function showGame(game) {
   nameInput.value = game?.name || '';
   activationInput.value = game?.localActivation || '';
   keyInput.value = '';
-  keyInput.placeholder = game ? 'Connected for this tab' : '';
+  keyInput.placeholder = game?.stored ? 'Saved Autopilot connection' : game ? 'Connected for this tab' : '';
   keyInput.required = !game;
+  keyInput.disabled = Boolean(game?.stored);
   refresh.textContent = game ? 'Refresh analytics' : 'Connect and load';
   refresh.disabled = false;
-  disconnect.hidden = !game;
+  disconnect.hidden = !game || Boolean(game.stored);
   panel.hidden = !game?.data;
   status.textContent = '';
   renderGames();
@@ -249,13 +260,15 @@ function showGame(game) {
   get('watcher-token-field').hidden = true;
   get('copy-token').textContent = 'Copy PowerShell setup';
   renderActivity(game?.activity);
+  window.autopilotSelection?.(game);
 }
-get('add-game').addEventListener('click', () => { showGame(); universeInput.focus(); });
-gameSelect.addEventListener('change', () => {
-  showGame(games.get(gameSelect.value));
+function selectGame(universe) {
+  showGame(games.get(universe));
   updateActivity();
   loadPerformance();
-});
+}
+get('add-game').addEventListener('click', () => { showGame(); universeInput.focus(); });
+gameSelect.addEventListener('change', () => selectGame(gameSelect.value));
 disconnect.addEventListener('click', () => {
   games.delete(connection?.universe);
   showGame(games.values().next().value);

@@ -14,6 +14,10 @@ export function activeThumbnails(config) {
   return (config?.thumbnails ?? []).filter(item => item.personalizedThumbnailStatus === 'Active');
 }
 
+export const homeIds = config => activeThumbnails(config).map(item => item.homepageThumbnailId);
+export const sameSet = (a, b) => a.length === b.length && a.every(id => b.includes(id));
+export const canActivate = item => item.moderationStatus === 'Approved' && item.homepageThumbnailStatus === 'Active';
+
 export function homeAnalytics(universe, key) {
   const thumbnails = `/thumbnail-personalization-api/v1/universes/${universe}`;
   const analytics = `/analytics-query-api/v1/universes/${universe}`;
@@ -36,6 +40,25 @@ export function homeAnalytics(universe, key) {
     const {personalizedConfigs} = await request(`${thumbnails}/personalization?status=Active`);
     if (!Array.isArray(personalizedConfigs) || personalizedConfigs.length > 1) throw new Error('Unexpected active configuration response.');
     return personalizedConfigs[0];
+  }
+
+  async function listThumbnails() {
+    const items = [], cursors = new Set();
+    let cursor = '';
+    do {
+      if (cursors.has(cursor)) throw new Error('Roblox repeated a thumbnail page.');
+      cursors.add(cursor);
+      const page = await request(`${thumbnails}/thumbnails?${new URLSearchParams(cursor ? {nextCursor: cursor} : {})}`);
+      items.push(...page.homepageThumbnails);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return items;
+  }
+
+  function updateActive(ids, config) {
+    return request(`${thumbnails}/personalization/${config ? 'update' : 'create'}`, {
+      json: config ? {id: config.id, homepageThumbnailIds: ids} : {homepageThumbnailIds: ids}
+    });
   }
 
   async function thumbnailMetric(metric, startTime, endTime, assetIds, granularity) {
@@ -94,5 +117,5 @@ export function homeAnalytics(universe, key) {
     }).sort((a, b) => b.qualifiedPlayRate - a.qualifiedPlayRate);
   }
 
-  return {thumbnails, request, activeConfig, scores};
+  return {thumbnails, request, activeConfig, listThumbnails, updateActive, scores};
 }

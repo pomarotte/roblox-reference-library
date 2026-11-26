@@ -524,6 +524,10 @@ $('find-similar').addEventListener('click', () => {
   window.scrollTo({top: 0});
 });
 viewerThumbnailTest?.addEventListener('click', () => {
+  if (viewerThumbnailTest.hasAttribute('data-analytics')) {
+    window.open(`https://analytics.rolibrary.win/?game=${encodeURIComponent(selectedGame.id)}`, '_blank', 'noopener');
+    return;
+  }
   lastTrigger = null;
   $('viewer').close();
   generator.startTest(selectedGame, selectedImages[imageIndex].id);

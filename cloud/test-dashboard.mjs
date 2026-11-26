@@ -73,7 +73,7 @@ try {
       addEventListener(event, fn) { this.listeners[event] = fn; },
       replaceChildren(...nodes) { this.children = nodes; },
       append(...nodes) { this.children.push(...nodes); },
-      setAttribute() {}, focus() {}
+      setAttribute() {}, removeAttribute() {}, contains() { return false; }, focus() {}
     });
     return elements.get(id);
   };
@@ -87,7 +87,7 @@ try {
   let paired = false, lastRotationAt = null;
   const timers = new Map();
   const browser = {
-    document: {getElementById: element, createElement: () => element()},
+    document: {getElementById: element, createElement: tagName => Object.assign(element(), {tagName})},
     window: {addEventListener() {}},
     AbortController, setInterval(fn, interval) { timers.set(interval, fn); },
     Option: class { constructor(text, value) { Object.assign(this, {text, value}); } },
@@ -160,6 +160,38 @@ try {
   assert.equal(element('performance').hidden, false);
   element('disconnect').listeners.click();
   assert.equal(element('performance').hidden, true);
+
+  const openBatch = 'batch-to-review';
+  const savedGame = {universe: '456', name: 'Second game', brief: {description: 'A racing game', assets: [], references: []},
+    suggestions: [], starting: [], active: [], library: [], batches: [{id: openBatch, phase: 'review', number: 1,
+      items: [{id: 'draft-1', label: 'Draft 1', stage: 'draft', imageReady: true}]}]};
+  const legacyFetch = browser.fetch;
+  const approvals = [];
+  Object.assign(browser, {URL, URLSearchParams,
+    location: new URL(`${origin}/?game=456&batch=${openBatch}`), history: {replaceState() {}},
+    async fetch(path, options) {
+      if (path === '/api/autopilot?') return Response.json({enabled: true,
+        games: [{universe: '123', name: 'First game'}, {universe: '456', name: 'Second game', review: true}]});
+      if (path === '/api/autopilot?game=456') {
+        if (!options) return Response.json(savedGame);
+        approvals.push(JSON.parse(options.body));
+        return Response.json({...savedGame, batches: [{...savedGame.batches[0], phase: 'testing'}]});
+      }
+      return legacyFetch(path, options);
+    }
+  });
+  runInNewContext(await readFile(new URL('./dashboard/autopilot.client.js', import.meta.url), 'utf8'), browser);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(element('game-tabs').children[1].textContent, /Second game · Review ready/);
+  assert.match(element('autopilot-review-heading').textContent, /Second game · Round 1/);
+  assert.equal(element('autopilot-approve').disabled, true);
+  const checkbox = element('autopilot-drafts').children[0].children.find(node => node.tagName === 'label').children[0];
+  checkbox.checked = true;
+  checkbox.listeners.change();
+  assert.equal(element('autopilot-approve').disabled, false);
+  await element('autopilot-approve').listeners.click();
+  assert.deepEqual(approvals, [{action: 'approve', batch: openBatch, ids: ['draft-1']}]);
+  assert.equal(element('autopilot-approval').hidden, true);
 } finally {
   globalThis.fetch = originalFetch;
 }

@@ -66,3 +66,22 @@ details > label { margin-top: .75rem; }
 .activity-events li[data-status="changed"] p { color: #79daba; }
 @media (max-width: 650px) { .activity-events li { grid-template-columns: 1fr; } }
 li { margin: .55rem 0; }
+
+.game-tabs { flex-wrap: nowrap; align-items: baseline; overflow-x: auto; padding-bottom: .2rem; }
+.game-tabs .actions { flex-wrap: nowrap; }
+.game-tabs button { white-space: nowrap; }
+.game-tabs button[aria-current] { border-color: #79cafa; background: #203947; }
+.full-width { grid-column: 1 / -1; }
+#autopilot details, #autopilot form, #autopilot-review { margin-top: 1rem; }
+#autopilot summary { cursor: pointer; }
+#autopilot h3 { margin: 1.2rem 0 .6rem; }
+#autopilot textarea { width: 100%; resize: vertical; padding: .55rem; color: inherit; background: #121216; border: 1px solid #454553; border-radius: 6px; font: inherit; }
+.thumbnail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: .8rem; margin-block: .8rem; }
+.thumbnail-card { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: .45rem; padding: .65rem; border-radius: 8px; border: 1px solid #454553; background: #16161c; overflow-wrap: anywhere; }
+.thumbnail-card img, .preview-missing { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #121216; border-radius: 4px; }
+.preview-missing { display: grid; place-items: center; }
+.thumbnail-card p, .thumbnail-card details { margin: 0; }
+.thumbnail-card a, .thumbnail-card summary { font-size: .9rem; }
+.thumbnail-card details { width: 100%; }
+.check-label { display: flex; align-items: center; gap: .4rem; }
+.generation-description { white-space: pre-wrap; }

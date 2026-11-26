@@ -96,9 +96,26 @@ To refer to a specific character or object, choose **Add box** on a selected ref
 
 Use **Edit thumbnail** to revise the current image. The arrows below the preview browse generations and edits from this page session. Edits start from the selected version, and each version retains its own download and upscale.
 
-## Test thumbnails on Roblox Home
+## Thumbnail Autopilot in Analytics
 
-1. Open an archived thumbnail for your game and click **Draft Home thumbnails**. RoLibrary fills in the Universe ID and looks for up to two references from different similar games. You can also open **Roblox Home thumbnail test** in the generator and enter a Universe ID directly.
+Open the private Analytics dashboard, connect with **Connect Autopilot**, and choose the game's tab.
+Save a creative brief with a description, character or environment images, props, and any similar-game
+references you want to use. Add existing Home thumbnails or finished uploads to the starting pool.
+Choose the pool size (10 by default) and round limit. Autopilot generates the remaining drafts.
+
+When a batch is ready, follow the review email or open the game tab. Inspect the final images,
+edit or regenerate individual drafts, select the ones you approve, and submit them for Roblox moderation.
+Autopilot keeps five thumbnails active by swapping one at a time, after every live thumbnail has
+10,000 impressions in shared reporting hours. If the game has fewer than five active thumbnails,
+the campaign waits until enough approved thumbnails are available to fill all five slots.
+After testing the pool, it generates the next round from up to three leading thumbnails and waits for
+approval again. Each game advances in the background and can be paused from its own tab.
+
+See [Autopilot deployment](cloud/README.md#thumbnail-autopilot) for the owner setup.
+
+## Manual Roblox Home testing
+
+1. In builds without the Analytics link enabled, open an archived thumbnail for your game and click **Draft Home thumbnails**. RoLibrary fills in the Universe ID and looks for up to two references from different similar games. You can also open **Roblox Home thumbnail test** in the generator and enter a Universe ID directly.
 2. Describe your game, upload assets, and click **Generate 3 variants**. RoLibrary drafts all three at 960 × 540. Use the history arrows to review them and click **AI upscale to 1920 × 1080** on the ones you want to test. Review each upscaled image, click **Approve this version**, and download it from the approved-version list.
 3. Set `ROBLOX_API_KEY` in your terminal environment. Scope it to the game and grant `universe.thumbnail:read` and `universe.thumbnail:write`. Add `universe.analytics:read` for ranking. From the repository, use Node.js 20+ to upload your approved files and check their moderation status.
 
@@ -134,7 +151,7 @@ Enter the activation time as `YYYY-MM-DDTHH:MM:SSZ`. Once Roblox approves the ch
 
 ### Follow performance in the analytics dashboard
 
-Sign in with a one-time code sent to an allowed email address, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for the dashboard. Use **Add another game** and the **Selected game** menu to switch between experiences in one browser tab. The dashboard refreshes the selected game every five minutes while the tab is visible. It charts each thumbnail’s qualified play rate, progress toward the rotation threshold, and performance over time using shared completed reporting hours. Expand **Exact numbers** for the underlying totals. Enter the last activation time after changing the active set. The dashboard clears keys when you disconnect a game, reload, or leave the page.
+Sign in with a one-time code sent to an allowed email address, then connect the experience with its Universe ID and an Open Cloud key scoped to that experience. Grant `universe.thumbnail:read` and `universe.analytics:read` for a temporary connection. Use **+ Add game** and the game tabs to switch between experiences. The dashboard refreshes the selected game every five minutes while the tab is visible. It charts each thumbnail’s qualified play rate, progress toward the rotation threshold, and performance over time using shared completed reporting hours. Expand **Exact numbers** for the underlying totals. Enter the last activation time after manually changing the active set. Temporary connections clear when you leave the page. Autopilot connections use encrypted keys saved for background runs.
 
 For live rotation activity, connect the game and open **Rotation activity → Set up live activity**. Click **Generate watcher token**, then **Copy PowerShell setup**. Paste the copied command in the terminal where you run the watcher, and run `watch` or `rotate` with your existing Roblox API key. Each game has its own watcher token. The dashboard updates automatically while open and keeps recent events across visits. After a confirmed rotation, it reloads the charts using the new activation time. Use **Stop live updates** to revoke the watcher token. The token sends activity only, and the watcher keeps its Roblox key in its own terminal.
 
