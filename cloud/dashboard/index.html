@@ -87,6 +87,12 @@
             <p class="muted full-width" id="autopilot-reference-status" role="status"></p>
             <div class="thumbnail-grid full-width" id="autopilot-reference-list" aria-label="Similar-game thumbnail references"></div>
           </form>
+          <form id="autopilot-manual-reference-form">
+            <label class="full-width">Find a game by name or Roblox link<input id="autopilot-game-search" type="search" maxlength="300" required placeholder="Game name, Roblox link, or Universe ID"></label>
+            <div class="actions"><button id="autopilot-game-search-button" type="submit" class="secondary">Search games</button></div>
+            <p class="muted full-width" id="autopilot-manual-reference-status" role="status"></p>
+            <div class="thumbnail-grid full-width" id="autopilot-manual-reference-list" aria-label="Manual game search results"></div>
+          </form>
           <form id="autopilot-asset-form">
             <label>Asset name<input id="autopilot-asset-name" maxlength="80" required></label>
             <label>Use as<select id="autopilot-asset-kind"><option>Character</option><option>Environment</option><option>Prop</option><option>Logo</option><option>Gameplay screenshot</option></select></label>

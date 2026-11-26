@@ -2,11 +2,14 @@
 (() => {
   const section = get('autopilot'), status = get('autopilot-status');
   const referenceStatus = get('autopilot-reference-status');
+  const manualReferenceStatus = get('autopilot-manual-reference-status');
   const reviewSet = new Set(), editedDescriptions = new Map();
+  const referenceChoices = new Map();
   const params = new URLSearchParams(location.search);
   let requestedGame = params.get('game'), requestedBatch = params.get('batch');
   let enabled = false, selected, game, round, busy = false, selection = 0;
   let infoVersion, cardsVersion, libraryVersion, liveVersion, briefVersion, tabsVersion, batchOptions;
+  let manualVersion;
   const stages = {
     generating: 'Generating', draft: 'Ready to review', generationFailed: 'Generation failed',
     excluded: 'Skipped', queued: 'Approved for submission', submitting: 'Upload unconfirmed',
@@ -128,7 +131,11 @@
     briefVersion = cardsVersion = libraryVersion = liveVersion = infoVersion = batchOptions = undefined;
     reviewSet.clear();
     editedDescriptions.clear();
+    referenceChoices.clear();
     referenceStatus.textContent = '';
+    manualReferenceStatus.textContent = '';
+    get('autopilot-game-search').value = '';
+    manualVersion = undefined;
     get('autopilot-game').hidden = true;
     get('autopilot-key').hidden = Boolean(entry?.stored);
     section.hidden = !entry;
@@ -158,11 +165,13 @@
     if (!selected || busy) return false;
     const ticket = selection, universe = selected;
     const searching = action === 'references';
-    const feedback = searching ? referenceStatus : status;
+    const manualSearch = action === 'searchGames';
+    const feedback = searching ? referenceStatus : manualSearch || action === 'addReference' ? manualReferenceStatus : status;
     busy = true;
     section.setAttribute('aria-busy', 'true');
-    feedback.textContent = searching ? 'Searching the Roblox catalogue…' : 'Saving…';
+    feedback.textContent = searching || manualSearch ? 'Searching for thumbnail references…' : 'Saving…';
     if (searching) get('autopilot-find').disabled = true;
+    if (manualSearch) get('autopilot-game-search-button').disabled = true;
     try {
       const view = await api(universe, {action, ...payload}, file, query);
       if (selection !== ticket) return false;
@@ -178,6 +187,8 @@
       }
       if (action === 'start') round = null;
       if (['start', 'approve', 'regenerate'].includes(action)) reviewSet.clear();
+      if (action === 'brief') referenceChoices.clear();
+      if (action === 'addReference') referenceChoices.delete(payload.id);
       if (['brief', 'references'].includes(action)) briefVersion = undefined;
       status.textContent = action === 'approve' ? 'Approved. Autopilot will submit the selected images.' : '';
       renderAutopilot(view);
@@ -187,6 +198,9 @@
           ? `Found ${count} ${count === 1 ? 'similar game' : 'similar games'}. Select up to three thumbnails, then click Save brief.`
           : 'No similar games found. Try including the genre or main gameplay mechanic in your description.';
       }
+      if (manualSearch) feedback.textContent = view.manualSuggestions.length
+        ? 'Choose a thumbnail to add it to your brief.' : 'No thumbnails found. Try a different title or paste the game’s Roblox link.';
+      if (action === 'addReference') feedback.textContent = 'Thumbnail added to your creative brief.';
       refreshTabs().catch(() => {});
       if (action === 'key') {
         get('autopilot-key-input').value = '';
@@ -201,6 +215,7 @@
       busy = false;
       section.removeAttribute('aria-busy');
       if (searching) get('autopilot-find').disabled = false;
+      if (manualSearch) get('autopilot-game-search-button').disabled = false;
     }
   }
 
@@ -217,15 +232,33 @@
       const label = el('label', '', 'thumbnail-card'), checkbox = el('input');
       checkbox.type = 'checkbox';
       checkbox.value = item.id;
-      checkbox.checked = saved.has(item.id);
+      checkbox.checked = referenceChoices.get(item.id) ?? saved.has(item.id);
+      checkbox.addEventListener('change', () => referenceChoices.set(item.id, checkbox.checked));
       const row = el('span', '', 'check-label');
       row.append(checkbox, item.name);
       label.append(preview(item.image, ''), row);
+      if (item.reason) label.append(el('p', item.reason, 'muted'));
       return label;
     }));
     get('autopilot-assets').replaceChildren(...brief.assets.map(asset => {
       const node = card(asset.name, media(asset.id), `${asset.kind}${asset.required ? ' · Must include' : ''}`);
       node.append(button('Remove asset', () => act('removeAsset', {id: asset.id})));
+      return node;
+    }));
+  }
+
+  function renderManualReferences(view) {
+    const results = view.manualSuggestions || [];
+    const selected = view.brief.references.map(item => item.id);
+    const fingerprint = JSON.stringify([results, selected]);
+    if (manualVersion === fingerprint) return;
+    manualVersion = fingerprint;
+    get('autopilot-manual-reference-list').replaceChildren(...results.map(item => {
+      const node = card(item.name, item.image);
+      const added = selected.includes(item.id);
+      const add = button(added ? 'Added' : 'Add thumbnail', () => act('addReference', {id: item.id}));
+      add.disabled = added;
+      node.append(add);
       return node;
     }));
   }
@@ -371,6 +404,7 @@
       get('autopilot-controls').replaceChildren(...controls);
     }
     renderBrief(view);
+    renderManualReferences(view);
     renderPool(view, editable);
     renderLive(view);
     renderDrafts(view, current);
@@ -411,6 +445,10 @@
   });
   get('autopilot-find').addEventListener('click', () =>
     act('references', {description: get('autopilot-description').value}));
+  get('autopilot-manual-reference-form').addEventListener('submit', event => {
+    event.preventDefault();
+    return act('searchGames', {query: get('autopilot-game-search').value});
+  });
   get('autopilot-asset-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (await act('image', {}, get('autopilot-asset-file').files[0], {type: 'asset', name: get('autopilot-asset-name').value,

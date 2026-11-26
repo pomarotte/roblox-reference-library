@@ -83,7 +83,7 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
     assert.equal(pathname, '/data/charts.json');
     return Response.json({genres: {Racing: {games: [
       {id: 456, name: 'Downhill Shopping Cart Racing', image: preview, genre: 'Racing'},
-      {id: 789, name: 'My Farm', image: preview, genre: 'Simulation'}
+      {id: 789, name: 'My Farm', image: preview, genre: 'Simulation', description: 'Race to sell your crops.'}
     ]}}});
   }
   if (hostname === 'api.resend.com') {
@@ -91,15 +91,36 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
     return Response.json({}, {status: emails.length === 1 ? 503 : 200});
   }
   if (hostname === 'generativelanguage.googleapis.com') {
-    generations.push(JSON.parse(body).contents[0].parts);
+    const content = JSON.parse(body);
+    if (pathname.includes('gemini-3.1-flash-lite')) {
+      const input = JSON.parse(content.contents[0].parts[0].text);
+      assert.deepEqual(input.candidates.map(game => game.id).sort(), ['456', '789']);
+      assert.equal(headers['x-goog-api-key'], 'gemini-test');
+      return Response.json({candidates: [{content: {parts: [{text: JSON.stringify([
+        {id: '456', reason: 'Both games race downhill in shopping carts.'},
+        {id: '999', reason: 'This game is outside the shortlist.'},
+        {id: '456', reason: 'Duplicate match.'}
+      ])}]}}]});
+    }
+    generations.push(content.contents[0].parts);
     return Response.json({candidates: [{content: {parts: [{inlineData: {data: 'AQID'}}]}}]});
   }
   if (hostname === 'thumbnails.roblox.com') {
+    if (pathname.endsWith('/multiget/thumbnails')) return Response.json({data: searchParams.get('universeIds').split(',')
+      .map(universeId => ({universeId, thumbnails: [{state: 'Completed', imageUrl: preview}]}))});
     return Response.json({data: searchParams.get('assetIds').split(',').map(targetId => ({
       targetId, state: 'Completed', imageUrl: preview
     }))});
   }
   if (hostname === 'tr.rbxcdn.com') return new Response(image, {headers: {'Content-Type': contentType}});
+  if (pathname === '/search-api/omni-search') {
+    assert.equal(searchParams.get('searchQuery'), 'Cart Championship');
+    return Response.json({searchResults: [{contentGroupType: 'Game', contents: [
+      {universeId: 852, name: 'Cart Championship'}, {universeId: 123, name: 'Cart park'}
+    ]}]});
+  }
+  if (pathname === '/universes/v1/places/777/universe') return Response.json({universeId: 852});
+  if (hostname === 'games.roblox.com') return Response.json({data: [{id: 852, name: 'Cart Championship'}]});
   assert.equal(hostname, 'apis.roblox.com');
   assert.equal(headers['x-api-key'], 'example-key');
   if (rejectedRead && pathname.endsWith(rejectedRead.path)) {
@@ -186,7 +207,13 @@ try {
   const brief = 'Players race downhill in shopping carts.';
   const found = await action('references', {description: brief});
   assert.deepEqual(found.suggestions.map(item => item.id), ['456']);
+  assert.match(found.suggestions[0].reason, /race downhill/);
   await action('brief', {description: brief, references: ['456']});
+  assert.deepEqual((await action('searchGames', {query: 'Cart Championship'})).manualSuggestions.map(item => item.id), ['852']);
+  assert.deepEqual((await action('searchGames', {query: 'https://www.roblox.com/games/777/Cart-Championship'}))
+    .manualSuggestions.map(item => item.id), ['852']);
+  assert.equal((await post('addReference', {id: '999'})).status, 400);
+  assert.deepEqual((await action('addReference', {id: '852'})).brief.references.map(item => item.id), ['456', '852']);
   await upload('type=starting&name=Finished%20file');
   const first = (await action('start', {target: 10, rounds: 2})).batches[0];
   assert.equal(first.items.length, 10);
@@ -194,7 +221,7 @@ try {
   for (let attempt = 0; attempt < 12; attempt++) await tick();
   assert.equal(generations.length, 9);
   assert.ok(generations[0][0].text.includes('Cart driver (must include)'));
-  assert.equal(generations[0].filter(part => part.inlineData).length, 2);
+  assert.equal(generations[0].filter(part => part.inlineData).length, 3);
   assert.equal(submissions.length, 0);
   assert.equal(swaps.length, 0);
   assert.equal(emails.length, 2);

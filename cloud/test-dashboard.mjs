@@ -207,6 +207,15 @@ try {
           ];
           return Response.json(savedGame);
         }
+        if (command.action === 'searchGames') {
+          assert.equal(command.query, 'Cart Championship');
+          savedGame.manualSuggestions = [{id: '852', name: command.query, image: previewUrl(103)}];
+          return Response.json(savedGame);
+        }
+        if (command.action === 'addReference') {
+          savedGame.brief.references = savedGame.manualSuggestions.filter(item => item.id === command.id);
+          return Response.json(savedGame);
+        }
         approvals.push(command);
         return Response.json({...savedGame, batches: [{...savedGame.batches[0], phase: 'testing'}]});
       }
@@ -232,6 +241,13 @@ try {
   await element('autopilot-find').listeners.click();
   assert.equal(element('autopilot-reference-status').textContent, 'Catalogue unavailable.');
   assert.equal(element('autopilot-find').disabled, false);
+  element('autopilot-game-search').value = 'Cart Championship';
+  await element('autopilot-manual-reference-form').listeners.submit({preventDefault() {}});
+  const manualCard = element('autopilot-manual-reference-list').children[0];
+  assert.equal(manualCard.children[0].src, previewUrl(103));
+  await manualCard.children.find(item => item.tagName === 'button').listeners.click();
+  assert.equal(savedGame.brief.references[0].id, '852');
+  assert.match(element('autopilot-manual-reference-status').textContent, /added to your creative brief/);
   assert.equal(element('autopilot-approve').disabled, true);
   const checkbox = element('autopilot-drafts').children[0].children.find(node => node.tagName === 'label').children[0];
   checkbox.checked = true;

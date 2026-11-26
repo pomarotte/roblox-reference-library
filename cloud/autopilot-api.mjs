@@ -1,6 +1,6 @@
 import {RobloxApiError, homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
-import {describeDraft, findReferences, imageKey, readJson, storageKey, storeImage} from './autopilot-services.mjs';
+import {describeDraft, findReferences, imageKey, readJson, searchGameReferences, storageKey, storeImage} from './autopilot-services.mjs';
 
 const universePattern = /^[1-9]\d{0,19}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
@@ -131,7 +131,7 @@ async function updateGame(request, env, row, game, url, body) {
     const description = clean(body.description, 1800);
     requireInput(description, 'Describe your game and what its thumbnails should show.');
     if (action === 'references') {
-      game.suggestions = await findReferences(row.universe, description);
+      game.suggestions = await findReferences(env.AUTOPILOT_GEMINI_KEY, row.universe, description);
     } else {
       requireInput(Array.isArray(body.references) && body.references.length <= 3, 'Choose up to three similar-game references.');
       const offered = new Map([...game.brief.references, ...game.suggestions].map(reference => [reference.id, reference]));
@@ -139,6 +139,17 @@ async function updateGame(request, env, row, game, url, body) {
       game.brief.references = [...new Set(body.references)].map(id => offered.get(id));
     }
     game.brief.description = description;
+  } else if (action === 'searchGames') {
+    const query = clean(body.query, 300);
+    requireInput(query, 'Enter a game name, Roblox game link, or Universe ID.');
+    game.manualSuggestions = await searchGameReferences(row.universe, query);
+  } else if (action === 'addReference') {
+    const reference = game.manualSuggestions?.find(item => item.id === body.id);
+    requireInput(reference, 'Choose a thumbnail from the current search results.');
+    if (!game.brief.references.some(item => item.id === reference.id)) {
+      requireInput(game.brief.references.length < 3, 'You can save up to three references. Uncheck one and save the brief to make room.');
+      game.brief.references.push(reference);
+    }
   } else if (action === 'removeAsset') {
     game.brief.assets = game.brief.assets.filter(asset => asset.id !== body.id);
   } else if (action === 'library') {
