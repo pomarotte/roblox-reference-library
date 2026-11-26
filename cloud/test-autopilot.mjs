@@ -76,8 +76,9 @@ let moderated = false, enoughTraffic = false;
 let rejectedRead;
 const preview = 'https://tr.rbxcdn.com/demo/768/432/Image/Webp/noFilter';
 const originalFetch = fetch;
-globalThis.fetch = async (url, {body, headers} = {}) => {
+globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   const {hostname, pathname, searchParams} = new URL(url);
+  assert.equal(redirect, 'manual');
   if (hostname === 'pomarotte.github.io') {
     return Response.json({genres: {Racing: {games: [
       {id: 456, name: 'Downhill Shopping Cart Racing', image: preview, genre: 'Racing'},
@@ -101,6 +102,7 @@ globalThis.fetch = async (url, {body, headers} = {}) => {
   assert.equal(hostname, 'apis.roblox.com');
   assert.equal(headers['x-api-key'], 'example-key');
   if (rejectedRead && pathname.endsWith(rejectedRead.path)) {
+    if (rejectedRead.status === 302) return Response.redirect('https://example.com/');
     return Response.json({errors: [{message: rejectedRead.message}]}, {status: rejectedRead.status});
   }
   if (pathname.endsWith('/personalization')) {
@@ -152,6 +154,10 @@ try {
   const invalidKey = await post('connect', connection);
   assert.equal(invalidKey.status, 400);
   assert.match((await invalidKey.json()).error, /active Home thumbnail set.*key as invalid/);
+  rejectedRead = {path: '/personalization', status: 302};
+  const redirected = await post('connect', connection);
+  assert.equal(redirected.status, 400);
+  assert.match((await redirected.json()).error, /active Home thumbnail set \(HTTP 302\)/);
   rejectedRead = {path: '/thumbnails', status: 403, message: 'IP address not allowed — example-key'};
   const blockedIp = (await (await post('connect', connection)).json()).error;
   assert.match(blockedIp, /list the game’s Home thumbnails.*IP restrictions/);

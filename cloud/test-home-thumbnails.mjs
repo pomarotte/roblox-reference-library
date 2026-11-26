@@ -34,7 +34,7 @@ globalThis.fetch = async (url, options) => {
   }
   assert.equal(parsed.origin, 'https://apis.roblox.com');
   assert.equal(options.headers['x-api-key'], 'test-key');
-  assert.equal(options.redirect, 'error');
+  assert.equal(options.redirect, 'manual');
   requestCount++;
   const endpoint = parsed.pathname.split('/123')[1];
   if (endpoint === '/thumbnails/uploads') {

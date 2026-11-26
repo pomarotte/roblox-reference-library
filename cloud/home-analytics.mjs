@@ -37,14 +37,14 @@ export function homeAnalytics(universe, key) {
       body = JSON.stringify(json);
     }
     const response = await fetch(`https://apis.roblox.com${path}`, {
-      method: body ? 'POST' : 'GET', body, headers, redirect: 'error', signal: AbortSignal.timeout(30_000)
+      method: body ? 'POST' : 'GET', body, headers, redirect: 'manual', signal: AbortSignal.timeout(30_000)
     });
     if (!response.ok) {
       const data = [401, 403].includes(response.status) ? await response.json().catch(() => null) : null;
       const message = data?.errors?.[0]?.message || data?.message;
       let reason;
       if (typeof message === 'string' && /\bip\b/i.test(message)) reason = 'ip';
-      if (message === 'Invalid authentication data provided') reason = 'authentication';
+      if (message === 'Invalid authentication data provided' || message === 'Invalid API Key') reason = 'authentication';
       throw new RobloxApiError(response.status, path, reason);
     }
     const content = await response.text();
@@ -52,7 +52,8 @@ export function homeAnalytics(universe, key) {
   }
 
   async function activeConfig() {
-    const {personalizedConfigs} = await request(`${thumbnails}/personalization?status=Active`);
+    const result = await request(`${thumbnails}/personalization?status=Active`);
+    const personalizedConfigs = result?.personalizedConfigs;
     if (!Array.isArray(personalizedConfigs) || personalizedConfigs.length > 1) throw new Error('Unexpected active configuration response.');
     return personalizedConfigs[0];
   }

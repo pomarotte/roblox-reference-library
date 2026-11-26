@@ -52,7 +52,7 @@ export async function readJson(request) {
 }
 
 async function checkedFetch(url, options = {}, timeout = 20_000) {
-  const response = await fetch(url, {...options, redirect: 'error', signal: AbortSignal.timeout(timeout)});
+  const response = await fetch(url, {...options, redirect: 'manual', signal: AbortSignal.timeout(timeout)});
   if (!response.ok) throw new Error(`Upstream service returned HTTP ${response.status}.`);
   return response;
 }
