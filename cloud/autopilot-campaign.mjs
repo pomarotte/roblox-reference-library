@@ -79,7 +79,8 @@ async function confirmSwap(game, batch, roblox, config, save) {
     return;
   }
   const available = await roblox.listThumbnails();
-  if (!after.every(id => available.some(item => item.homepageThumbnailId === id && canActivate(item)))) {
+  if (!after.filter(id => !before.includes(id)).every(id =>
+    available.some(item => item.homepageThumbnailId === id && canActivate(item)))) {
     game.paused = true;
     game.problem = 'Roblox no longer lists all five planned thumbnails as approved. Review the set before resuming.';
     return;

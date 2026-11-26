@@ -80,6 +80,7 @@ let currentGenerations = 0, peakGenerations = 0;
 const referenceDownloads = [];
 const operations = new Map();
 let moderated = false, enoughTraffic = false;
+let omitActiveApproval = false;
 let rejectedRead;
 const preview = 'https://tr.rbxcdn.com/demo/768/432/Image/Webp/noFilter';
 const racingPreviews = [preview, preview.replace('/demo/', '/racing/')];
@@ -171,7 +172,9 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   }
   if (pathname.endsWith('/thumbnails')) {
     if (moderated) for (const row of variants.values()) row.moderationStatus = 'Approved';
-    return Response.json({homepageThumbnails: [...variants.values()]});
+    return Response.json({homepageThumbnails: [...variants.values()].map(row =>
+      omitActiveApproval && row.homepageThumbnailId === 'base' && active.includes('base')
+        ? {...row, moderationStatus: undefined} : row)});
   }
   if (pathname.endsWith('/metrics')) {
     const query = JSON.parse(body), views = enoughTraffic ? 12_000 : 5;
@@ -297,6 +300,7 @@ try {
   await tick();
   assert.equal(swaps.length, 0, '12,000 impressions do not pass a saved minimum of 13,000');
   await action('minimum', {minimum: 12_000});
+  omitActiveApproval = true;
   for (let attempt = 0; attempt < 24; attempt++) await tick();
   assert.equal(swaps.length, 10);
   assert.ok(active.includes('base'));
