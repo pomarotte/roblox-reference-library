@@ -40,9 +40,10 @@
     return `/api/autopilot?game=${game.universe}&image=${id}`;
   }
 
-  function card(name, image, state) {
+  function card(name, image, state, showName = true) {
     const node = el('article', '', 'thumbnail-card');
-    node.append(preview(image, name), el('strong', name));
+    node.append(preview(image, name));
+    if (showName) node.append(el('strong', name));
     if (state) node.append(el('p', state, 'muted'));
     return node;
   }
@@ -114,7 +115,11 @@
 
   window.autopilotSelection = async entry => {
     get('connect-direct').hidden = !enabled || Boolean(entry);
-    if (!enabled || selected === entry?.universe && game) return;
+    if (!enabled) return;
+    if (selected === entry?.universe && game) {
+      renderLive(game);
+      return;
+    }
     const ticket = ++selection;
     selected = entry?.universe;
     game = null;
@@ -218,14 +223,14 @@
     if (libraryVersion === fingerprint) return;
     libraryVersion = fingerprint;
     get('autopilot-starting').replaceChildren(...view.starting.map(item => {
-      const node = card(item.label, item.existing ? item.image : media(item.id));
+      const node = card('Starting thumbnail', item.existing ? item.image : media(item.id), null, false);
       node.append(button('Remove from pool', () => act('removeStarting', {id: item.id})));
       return node;
     }));
     get('autopilot-target').min = Math.max(1, view.starting.length);
     if (Number(get('autopilot-target').value) < view.starting.length) get('autopilot-target').value = view.starting.length;
     const nodes = view.library.filter(item => item.approved && item.image).map(item => {
-      const node = card(item.label, item.image, item.active ? 'Currently active' : 'Previously uploaded');
+      const node = card('Home thumbnail', item.image, item.active ? 'Currently active' : 'Previously uploaded', false);
       const add = button('Add to pool', () => act('pick', {id: item.homeId}));
       add.disabled = view.starting.length >= 10 || view.starting.some(candidate => candidate.homeId === item.homeId);
       node.append(add);
@@ -243,16 +248,18 @@
   }
 
   function renderLive(view) {
-    const fingerprint = JSON.stringify([view.active, view.measurements, view.library, view.batches.flatMap(batch =>
+    const activePreviews = view.active.map(id => connection?.thumbnailImages?.get(id));
+    const fingerprint = JSON.stringify([view.active, activePreviews, view.measurements, view.library, view.batches.flatMap(batch =>
       batch.items.filter(item => view.active.includes(item.homeId)))]);
     if (liveVersion === fingerprint) return;
     liveVersion = fingerprint;
     const history = view.batches.flatMap(batch => batch.items);
-    get('autopilot-live').replaceChildren(...view.active.map(id => {
+    get('autopilot-live').replaceChildren(...view.active.map((id, index) => {
       const item = history.find(candidate => candidate.homeId === id && (candidate.imageReady || candidate.image))
         || view.library.find(candidate => candidate.homeId === id);
       const result = view.measurements?.find(row => row.homeId === id);
-      return card(item?.label || `Thumbnail ${id}`, item && (item.image || (item.id ? media(item.id) : null)), metrics(result));
+      const image = item?.image || (item?.id ? media(item.id) : activePreviews[index]);
+      return card(`Active thumbnail ${index + 1}`, image, metrics(result), false);
     }));
   }
 
@@ -275,7 +282,7 @@
       get('autopilot-drafts').replaceChildren(...displayed.items.map(item => {
         const image = item.existing ? item.image : item.imageReady ? media(item.id) : null;
         const state = view.active.includes(item.homeId) && item.stage === 'tested' ? 'Live · Tested' : stages[item.stage];
-        const node = card(item.label, image, state);
+        const node = card('Batch thumbnail', image, state, false);
         if (image) {
           const link = el('a', 'View full image');
           link.href = image;
@@ -283,7 +290,11 @@
           link.rel = 'noopener noreferrer';
           node.append(link);
         }
-        if (item.parent) node.append(el('p', `From ${item.parent.label}`, 'muted'));
+        if (item.parent) {
+          const source = el('div', 'Based on', 'activity-thumbnail muted');
+          source.append(thumbnailPreview(item.parent.id ? media(item.parent.id) : item.parent.image, 'Source thumbnail'));
+          node.append(source);
+        }
         if (item.result) node.append(el('p', metrics(item.result), 'muted'));
         if (item.detail) node.append(el('p', item.detail, 'muted'));
         if (canReview && item.stage === 'draft') {

@@ -1,6 +1,7 @@
 import {activeThumbnails, homeAnalytics, hour, reportingWindow, rotationMinimum} from './home-analytics.mjs';
 import {dashboardActivity, watchHost, watcherIngest} from './dashboard-activity.mjs';
 import {autopilotApi, autopilotConnection} from './autopilot-api.mjs';
+import {robloxImages} from './autopilot-services.mjs';
 
 const headers = {
   'Cache-Control': 'no-store',
@@ -76,11 +77,14 @@ export async function serveDashboard(request, env, ctx, assets) {
     catch { return json({error: 'Enter the last activation time within the past 29 days.'}, 400); }
     const {start, end} = window;
     const active = activeThumbnails(config);
+    const previews = robloxImages(active.map(item => item.assetId), 5000).catch(() => new Map());
     const trendHours = end - start <= 48 * hour ? 1 : 24;
-    const rows = start < end && active.length
+    const metrics = start < end && active.length
       ? await scores(active, start, end, 'OneHour', trendHours)
       : active.map(item => ({homeId: item.homepageThumbnailId, assetId: String(item.assetId),
         impressions: 0, qualifiedPlays: 0, qualifiedPlayRate: null, timeline: []}));
+    const images = await previews;
+    const rows = metrics.map(row => ({...row, image: images.get(row.assetId)}));
     return json({universe, activatedAt: startTime, windowStart: start.toISOString(), windowEnd: end.toISOString(),
       checkedAt: new Date(now).toISOString(), minimum, trendHours, rows});
   } catch (error) {

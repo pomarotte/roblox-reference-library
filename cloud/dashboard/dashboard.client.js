@@ -24,19 +24,47 @@ async function responseData(response) {
 fetch('/api/session').then(responseData).then(({email}) => { get('account').textContent = email; })
   .catch(error => { status.textContent = error.message; });
 
+function thumbnailPreview(url, label) {
+  const frame = document.createElement('span');
+  frame.className = 'analytics-thumbnail';
+  function unavailable() {
+    frame.replaceChildren('Preview unavailable');
+    frame.setAttribute('role', 'img');
+    frame.setAttribute('aria-label', `${label} preview unavailable`);
+  }
+  if (!url) unavailable();
+  else {
+    const image = document.createElement('img');
+    image.alt = label;
+    image.decoding = 'async';
+    image.addEventListener('error', unavailable);
+    image.src = url;
+    frame.append(image);
+  }
+  return frame;
+}
+
 function chartRows(element, rows, label, maximum, value, format, leader) {
-  element.replaceChildren(...rows.map(row => {
-    const item = document.createElement('li'), id = document.createElement('span');
+  element.replaceChildren(...rows.map((row, index) => {
+    const item = document.createElement('li'), details = document.createElement('div');
     const number = document.createElement('strong'), bar = document.createElement('progress');
+    const name = `Thumbnail ${index + 1}`;
     item.className = 'chart-row';
-    id.textContent = `${row.homeId}${leader === row ? ' · Leader' : ''}`;
+    details.className = 'chart-row-details';
+    if (leader === row) {
+      const badge = document.createElement('span');
+      badge.className = 'thumbnail-leader';
+      badge.textContent = 'Leader';
+      details.append(badge);
+    }
     const amount = value(row);
     number.textContent = amount == null ? '—' : format(amount);
     bar.max = maximum;
     bar.value = Math.min(amount ?? 0, maximum);
     bar.hidden = amount == null;
-    bar.setAttribute('aria-label', `${label} for ${row.homeId}`);
-    item.append(id, number, bar);
+    bar.setAttribute('aria-label', `${label} for thumbnail ${index + 1}`);
+    details.append(number);
+    item.append(thumbnailPreview(row.image, name), details, bar);
     return item;
   }));
 }
@@ -120,10 +148,13 @@ function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) 
   get('window').textContent = new Date(windowStart) < new Date(windowEnd)
     ? `Shared reporting hours from ${localTime(windowStart)} to ${localTime(windowEnd)}`
     : 'Waiting for the first full reporting hour.';
-  get('scores').replaceChildren(...rows.map(row => {
+  get('scores').replaceChildren(...rows.map((row, index) => {
     const tr = document.createElement('tr');
+    const identity = document.createElement('th');
+    identity.scope = 'row';
+    identity.append(thumbnailPreview(row.image, `Thumbnail ${index + 1}${leader === row ? ', leader' : ''}`));
+    tr.append(identity);
     for (const value of [
-      `${row.homeId}${leader === row ? ' · Leader' : ''}`,
       numbers.format(row.impressions), numbers.format(row.qualifiedPlays),
       row.qualifiedPlayRate == null ? '—' : percent.format(row.qualifiedPlayRate)
     ]) {
@@ -153,7 +184,7 @@ function render({rows, checkedAt, windowStart, windowEnd, minimum, trendHours}) 
     dot.textContent = '●';
     dot.style.color = chartColors[index];
     dot.setAttribute('aria-hidden', 'true');
-    item.append(dot, row.homeId);
+    item.append(dot, thumbnailPreview(row.image, `Thumbnail ${index + 1}`));
     return item;
   }));
   panel.hidden = false;
@@ -190,6 +221,11 @@ async function loadPerformance() {
     const data = await responseData(response);
     if (activeRequest !== request) return;
     connection.data = data;
+    connection.thumbnailImages ||= new Map();
+    for (const row of data.rows) {
+      if (row.image) connection.thumbnailImages.set(row.homeId, row.image);
+      else row.image = connection.thumbnailImages.get(row.homeId);
+    }
     games.set(universe, connection);
     renderGames();
     disconnect.hidden = Boolean(stored);
@@ -226,7 +262,8 @@ form.addEventListener('submit', event => {
     get('scores').replaceChildren();
   }
   connection = {key, universe, activatedAt, localActivation: time, name: nameInput.value.trim(),
-    data: existing?.data, activity: existing?.activity, stored: existing?.stored, review: existing?.review};
+    data: existing?.data, activity: existing?.activity, stored: existing?.stored, review: existing?.review,
+    thumbnailImages: existing?.thumbnailImages};
   keyInput.required = !existing;
   keyInput.value = '';
   loadPerformance();
@@ -281,11 +318,12 @@ setInterval(() => { if (!document.hidden) loadPerformance(); }, 5 * 60 * 1000);
 function renderActivity(activity) {
   const {paired, events = []} = activity || {};
   const latest = events[0];
+  const images = connection?.thumbnailImages;
   get('pair-watcher').textContent = paired ? 'Replace watcher token' : 'Generate watcher token';
   get('unpair-watcher').hidden = !paired;
   get('activity-status').textContent = latest?.nextCheck
-    ? `Next check ${localTime(latest.nextCheck)} · Challenger ${latest.challenger}`
-    : latest ? `Last check-in ${localTime(latest.at)} · Challenger ${latest.challenger}`
+    ? `Next check ${localTime(latest.nextCheck)}`
+    : latest ? `Last check-in ${localTime(latest.at)}`
       : paired ? 'Waiting for the first watcher check-in.' : 'Connect the local watcher to see live rotation updates.';
   get('events').replaceChildren(...events.map(event => {
     const item = document.createElement('li'), time = document.createElement('time');
@@ -293,7 +331,10 @@ function renderActivity(activity) {
     item.dataset.status = event.status;
     time.dateTime = new Date(event.at).toISOString();
     time.textContent = localTime(event.at);
-    message.textContent = event.message;
+    message.className = 'activity-thumbnail';
+    const description = event.message.replace(/^Kept leader \S+ and replaced \S+ with \S+\.$/, 'Kept the leader and rotated in this challenger.')
+      .replace(/\s+[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}\b/gi, '');
+    message.append(thumbnailPreview(images?.get(event.challenger), 'Challenger thumbnail'), description);
     item.append(message, time);
     return item;
   }));

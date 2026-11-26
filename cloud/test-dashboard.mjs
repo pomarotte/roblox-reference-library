@@ -15,9 +15,19 @@ const performance = (body, site = origin, ctx) => open('/api/performance', {
 }, ctx);
 
 let requests = 0;
+let previewsAvailable = true;
+const previewUrl = id => `https://tr.rbxcdn.com/test-${id}/768/432/Image/Webp/noFilter`;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, {headers, body}) => {
   requests++;
+  const parsed = new URL(url);
+  if (parsed.origin === 'https://thumbnails.roblox.com') {
+    assert.equal(headers, undefined);
+    assert.equal(parsed.searchParams.get('assetIds'), '100,101');
+    return previewsAvailable ? Response.json({data: [100, 101].map(targetId => ({
+      targetId, state: 'Completed', imageUrl: previewUrl(targetId)
+    }))}) : new Response(null, {status: 503});
+  }
   assert.match(url, /^https:\/\/apis\.roblox\.com\//);
   assert.equal(headers['x-api-key'], credentials.key);
   if (url.includes('/personalization')) {
@@ -57,6 +67,7 @@ try {
   const data = await result.json();
   assert.equal(data.minimum, 10_000);
   assert.deepEqual(data.rows.map(row => row.homeId), ['second', 'first']);
+  assert.deepEqual(data.rows.map(row => row.image), [previewUrl(101), previewUrl(100)]);
   assert.equal(data.rows[0].qualifiedPlayRate, 0.0202);
   assert.equal(data.trendHours, 1);
   assert.deepEqual(data.rows[0].timeline.map(point => point.impressions), [10000, 5000]);
@@ -65,6 +76,10 @@ try {
   assert.equal(daily.trendHours, 24);
   assert.deepEqual(daily.rows[0].timeline, [{at: Date.parse(fourDaysAgo), impressions: 15000, qualifiedPlays: 303}]);
   assert.ok(!JSON.stringify(data).includes(credentials.key));
+  previewsAvailable = false;
+  const withoutImages = await (await performance(credentials)).json();
+  assert.equal(withoutImages.rows[0].image, undefined);
+  assert.equal(withoutImages.rows[0].impressions, 15_000);
 
   const elements = new Map();
   const element = (id = Symbol()) => {
@@ -105,7 +120,7 @@ try {
         }
         activityReads.push(path);
         return Response.json({paired, lastRotationAt, events: path.endsWith('=123') ? [{
-          at: lastRotationAt || Date.parse(started), status: 'changed', message: 'Challenger became active.', challenger: 'third'
+          at: lastRotationAt || Date.parse(started), status: 'changed', message: 'Challenger became active.', challenger: 'second'
         }] : []});
       }
       const payload = JSON.parse(options.body);
@@ -124,9 +139,15 @@ try {
   assert.equal(element('slots').textContent, '2 / 5');
   assert.equal(element('scores').children.length, 2);
   assert.equal(element('rates').children.length, 2);
+  assert.equal(element('rates').children[0].children[0].children[0].src, previewUrl(101));
+  assert.equal(element('impressions').children[1].children[0].children[0].src, previewUrl(100));
+  assert.equal(element('trend-legend').children[0].children[1].children[0].src, previewUrl(101));
+  assert.equal(element('scores').children[1].children[0].children[0].children[0].src, previewUrl(100));
   assert.equal(element('impressions').children[0].children[2].max, 10_000);
   assert.equal(pointsDrawn, 4);
-  assert.match(element('events').children[0].children[0].textContent, /Challenger became active/);
+  const activity = element('events').children[0].children[0];
+  assert.equal(activity.children[0].children[0].src, previewUrl(101));
+  assert.match(activity.children[1], /Challenger became active/);
   await element('pair-watcher').listeners.click();
   assert.equal(element('watcher-token').value, 'a'.repeat(64));
   assert.equal(element('unpair-watcher').hidden, false);

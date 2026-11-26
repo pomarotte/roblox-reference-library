@@ -77,12 +77,12 @@ export async function storeImage(env, universe, id, stream, asset = false, input
   await env.AUTOPILOT_MEDIA.put(imageKey(universe, id), output, {httpMetadata: {contentType: format}});
 }
 
-export async function robloxImages(ids) {
+export async function robloxImages(ids, timeout) {
   const images = new Map();
   const unique = [...new Set(ids.map(String))].filter(id => /^\d{1,20}$/.test(id));
   for (let offset = 0; offset < unique.length; offset += 50) {
     const query = new URLSearchParams({assetIds: unique.slice(offset, offset + 50).join(','), size: '768x432', format: 'Webp', isCircular: 'false'});
-    const response = await checkedFetch(`https://thumbnails.roblox.com/v1/assets?${query}`);
+    const response = await checkedFetch(`https://thumbnails.roblox.com/v1/assets?${query}`, {}, timeout);
     for (const item of (await response.json()).data || []) {
       if (item.state === 'Completed' && cdnImage(item.imageUrl)) images.set(String(item.targetId), item.imageUrl);
     }
