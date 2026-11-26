@@ -151,7 +151,7 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   if (pathname.endsWith('/personalization/update')) {
     const next = JSON.parse(body).homepageThumbnailIds;
     assert.equal(next.length, 5);
-    assert.equal(next.filter(id => !active.includes(id)).length, 1);
+    assert.ok(next.filter(id => !active.includes(id)).length >= 1 && next.filter(id => !active.includes(id)).length <= 3);
     assert.ok(next.every(id => variants.get(id).moderationStatus === 'Approved'));
     active = next;
     swaps.push(next);
@@ -302,8 +302,8 @@ try {
   await action('minimum', {minimum: 12_000});
   omitActiveApproval = true;
   for (let attempt = 0; attempt < 24; attempt++) await tick();
-  assert.equal(swaps.length, 10);
-  assert.ok(active.includes('base'));
+  assert.equal(swaps.length, 4);
+  assert.ok(active.includes('upload-9') && active.includes('upload-10'));
   assert.equal((await game()).batches[0].items.filter(item => item.stage === 'tested').length, 10);
   const next = await batch();
   assert.equal(next.number, 2);
@@ -323,6 +323,10 @@ try {
   assert.equal((await batch()).items.filter(item => item.stage === 'excluded').length, 9);
   assert.deepEqual(planSwap({items: [{stage: 'ready', homeId: 'new'}]}, ['a', 'b', 'c', 'd']), ['a', 'b', 'c', 'd', 'new']);
   assert.equal(planSwap({items: [{stage: 'ready', homeId: 'new'}]}, ['a', 'b', 'c']), null);
+  const ranked = ['a', 'b', 'c', 'd', 'e'].map(homeId => ({homeId}));
+  const challengers = ['x', 'y', 'z', 'w'].map(homeId => ({stage: 'ready', homeId}));
+  assert.deepEqual(planSwap({baseline: 'e', items: challengers}, ['a', 'b', 'c', 'd', 'e'], ranked), ['a', 'b', 'x', 'y', 'z']);
+  assert.deepEqual(planSwap({items: challengers.slice(0, 2)}, ['a', 'b', 'c', 'd', 'e'], ranked), ['a', 'b', 'c', 'x', 'y']);
   const loadedBrief = (await game()).brief;
   const fullBrief = {...loadedBrief, assets: Array(8).fill(loadedBrief.assets[0])};
   const draft = {id: crypto.randomUUID(), description: 'Test composition', parent: {image: preview}};

@@ -44,9 +44,9 @@ export function planSwap(batch, current, rows) {
     return current.length + ready.length >= 5 ? [...current, ...ready.slice(0, 5 - current.length).map(item => item.homeId)] : null;
   }
   if (!ready.length || rows?.length !== 5) return null;
-  // Keep the round's baseline and the strongest other thumbnails across swaps.
-  const lowest = rows.findLast(row => row.homeId !== batch.baseline);
-  return current.map(id => id === lowest.homeId ? ready[0].homeId : id);
+  const replacements = ready.slice(0, 3);
+  const removed = new Set(rows.slice(-replacements.length).map(row => row.homeId));
+  return [...current.filter(id => !removed.has(id)), ...replacements.map(item => item.homeId)];
 }
 
 async function populateLibrary(roblox) {
