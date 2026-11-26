@@ -73,6 +73,7 @@ for (const [index, id] of active.entries()) {
 const emails = [], generations = [], submissions = [], swaps = [];
 const operations = new Map();
 let moderated = false, enoughTraffic = false;
+let rejectedRead;
 const preview = 'https://tr.rbxcdn.com/demo/768/432/Image/Webp/noFilter';
 const originalFetch = fetch;
 globalThis.fetch = async (url, {body, headers} = {}) => {
@@ -99,6 +100,9 @@ globalThis.fetch = async (url, {body, headers} = {}) => {
   if (hostname === 'tr.rbxcdn.com') return new Response(image, {headers: {'Content-Type': contentType}});
   assert.equal(hostname, 'apis.roblox.com');
   assert.equal(headers['x-api-key'], 'example-key');
+  if (rejectedRead && pathname.endsWith(rejectedRead.path)) {
+    return Response.json({errors: [{message: rejectedRead.message}]}, {status: rejectedRead.status});
+  }
   if (pathname.endsWith('/personalization')) {
     return Response.json({personalizedConfigs: [{id: 'config', createdUtc: new Date(time - 3_600_000).toISOString(),
       thumbnails: active.map(id => ({...variants.get(id), personalizedThumbnailStatus: 'Active'}))}]});
@@ -143,6 +147,18 @@ globalThis.fetch = async (url, {body, headers} = {}) => {
 try {
   assert.equal((await endpoint('', undefined, {})).status, 403);
   assert.equal((await endpoint('game=123', {method: 'POST', headers: {Origin: 'https://unrelated.test'}})).status, 403);
+  const connection = {name: 'Cart park', key: 'example-key'};
+  rejectedRead = {path: '/personalization', status: 403, message: 'Invalid authentication data provided'};
+  const invalidKey = await post('connect', connection);
+  assert.equal(invalidKey.status, 400);
+  assert.match((await invalidKey.json()).error, /active Home thumbnail set.*key as invalid/);
+  rejectedRead = {path: '/thumbnails', status: 403, message: 'IP address not allowed — example-key'};
+  const blockedIp = (await (await post('connect', connection)).json()).error;
+  assert.match(blockedIp, /list the game’s Home thumbnails.*IP restrictions/);
+  assert.ok(!blockedIp.includes(connection.key));
+  rejectedRead = {path: '/thumbnails', status: 503, message: 'Service unavailable'};
+  assert.match((await (await post('connect', connection)).json()).error, /Home thumbnails \(HTTP 503\).*Try again/);
+  rejectedRead = undefined;
   await action('connect', {name: 'Cart park', key: 'example-key'});
   await action('connect', {name: 'Different game', key: 'example-key'}, '456');
   assert.equal((await game()).minimum, 10_000);

@@ -1,4 +1,4 @@
-import {homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
+import {RobloxApiError, homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
 import {describeDraft, findReferences, imageKey, readJson, storageKey, storeImage} from './autopilot-services.mjs';
 
@@ -63,18 +63,33 @@ function publicGame(game) {
   return {...view, minimum: view.minimum ?? rotationMinimum};
 }
 
+async function checkThumbnailConnection(roblox) {
+  let operation = 'read the active Home thumbnail set';
+  try {
+    const config = await roblox.activeConfig();
+    operation = 'list the game’s Home thumbnails';
+    await roblox.listThumbnails();
+    return config;
+  } catch (error) {
+    if (error instanceof RobloxApiError) {
+      const context = `Roblox would not let RoLibrary ${operation} (HTTP ${error.status}).`;
+      if (error.reason === 'ip') throw new InputError(`${context} Check the IP restrictions on this Open Cloud key. RoLibrary connects from a Cloudflare Worker.`);
+      if (error.reason === 'authentication') throw new InputError(`${context} Roblox rejected the key as invalid. Verify it is active and paste the full key again.`);
+      if (error.status === 401 || error.status === 403) throw new InputError(`${context} Check that the key is active, has Thumbnail Read for this game, and allows requests from Cloudflare.`);
+      throw new InputError(`${context} Try again shortly.`);
+    }
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') throw new InputError(`Roblox timed out while trying to ${operation}. Try again shortly.`);
+    if (error.name === 'TypeError') throw new InputError(`RoLibrary could not reach Roblox to ${operation}. Try again shortly.`);
+    throw new InputError(`RoLibrary could not ${operation} because Roblox sent an unexpected response.`);
+  }
+}
+
 async function connect(db, env, owner, universe, body) {
   const name = clean(body.name, 60), key = clean(body.key, 1024);
   requireInput(name && /^[!-~]{1,1024}$/.test(key), 'Enter a game name and a Roblox Open Cloud key.');
   const existing = await lookup(db, owner, universe);
   if (existing) return json(publicGame(JSON.parse(existing.state)));
-  const roblox = homeAnalytics(universe, key);
-  let config;
-  try {
-    [config] = await Promise.all([roblox.activeConfig(), roblox.listThumbnails()]);
-  } catch {
-    throw new InputError('Roblox denied the connection or is unavailable. Check the Universe ID and Open Cloud key.');
-  }
+  const config = await checkThumbnailConnection(homeAnalytics(universe, key));
   const game = {name, universe, brief: {description: '', assets: [], references: []}, suggestions: [],
     library: [], starting: [], batches: [], active: homeIds(config), paused: false};
   const secret = await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, owner, universe, key);
@@ -94,8 +109,7 @@ async function updateGame(request, env, row, game, url, body) {
   if (action === 'key') {
     const key = clean(body.key, 1024);
     requireInput(/^[!-~]{1,1024}$/.test(key), 'Enter a Roblox Open Cloud key.');
-    try { await homeAnalytics(row.universe, key).activeConfig(); }
-    catch { throw new InputError('Roblox did not accept the replacement key.'); }
+    await checkThumbnailConnection(homeAnalytics(row.universe, key));
     const secret = await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, row.owner, row.universe, key);
     await env.WATCH_ACTIVITY.prepare('UPDATE autopilot_games SET secret = ? WHERE owner = ? AND universe = ? AND lease = ?')
       .bind(secret, row.owner, row.universe, row.lease).run();

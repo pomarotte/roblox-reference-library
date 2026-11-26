@@ -18,6 +18,14 @@ export const homeIds = config => activeThumbnails(config).map(item => item.homep
 export const sameSet = (a, b) => a.length === b.length && a.every(id => b.includes(id));
 export const canActivate = item => item.moderationStatus === 'Approved' && item.homepageThumbnailStatus === 'Active';
 
+export class RobloxApiError extends Error {
+  constructor(status, path, reason) {
+    super(`Roblox returned HTTP ${status} for ${path.split('?')[0]}.`);
+    this.status = status;
+    this.reason = reason;
+  }
+}
+
 export function homeAnalytics(universe, key) {
   const thumbnails = `/thumbnail-personalization-api/v1/universes/${universe}`;
   const analytics = `/analytics-query-api/v1/universes/${universe}`;
@@ -31,7 +39,14 @@ export function homeAnalytics(universe, key) {
     const response = await fetch(`https://apis.roblox.com${path}`, {
       method: body ? 'POST' : 'GET', body, headers, redirect: 'error', signal: AbortSignal.timeout(30_000)
     });
-    if (!response.ok) throw new Error(`Roblox returned HTTP ${response.status} for ${path.split('?')[0]}.`);
+    if (!response.ok) {
+      const data = [401, 403].includes(response.status) ? await response.json().catch(() => null) : null;
+      const message = data?.errors?.[0]?.message || data?.message;
+      let reason;
+      if (typeof message === 'string' && /\bip\b/i.test(message)) reason = 'ip';
+      if (message === 'Invalid authentication data provided') reason = 'authentication';
+      throw new RobloxApiError(response.status, path, reason);
+    }
     const content = await response.text();
     return content && response.headers.get('content-type')?.includes('json') ? JSON.parse(content) : undefined;
   }
@@ -48,7 +63,9 @@ export function homeAnalytics(universe, key) {
     do {
       if (cursors.has(cursor)) throw new Error('Roblox repeated a thumbnail page.');
       cursors.add(cursor);
-      const page = await request(`${thumbnails}/thumbnails?${new URLSearchParams(cursor ? {nextCursor: cursor} : {})}`);
+      const query = cursor ? `?${new URLSearchParams({nextCursor: cursor})}` : '';
+      const page = await request(`${thumbnails}/thumbnails${query}`);
+      if (!Array.isArray(page?.homepageThumbnails)) throw new Error('Unexpected homepage thumbnail list response.');
       items.push(...page.homepageThumbnails);
       cursor = page.nextCursor;
     } while (cursor);
