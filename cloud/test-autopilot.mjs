@@ -275,6 +275,13 @@ try {
   assert.equal((await post('approve', {batch: first.id, ids: [first.items.at(-1).id]})).status, 400);
   assert.equal((await post('approve', {batch: first.id, ids: reviewed.items.map(item => item.id)}, '123', 'other@example.com')).status, 404);
   await action('approve', {batch: first.id, ids: reviewed.items.map(item => item.id)});
+  await Promise.all(pending.splice(0));
+  assert.ok(queue.length, 'Approving a batch immediately queues uploads');
+  while (queue.length) {
+    const job = queue.shift();
+    await runCampaign(env, 'Existing RoLibrary GFX instructions', job.owner, job.universe);
+  }
+  assert.equal(submissions.length, 10, 'All approved images upload without waiting for the scheduler');
   for (let attempt = 0; attempt < 12; attempt++) await tick();
   assert.equal(submissions.length, 10);
   assert.equal(swaps.length, 0);

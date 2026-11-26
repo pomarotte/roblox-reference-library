@@ -176,7 +176,7 @@ async function testBatch(env, game, batch, roblox, save) {
   const queued = batch.items.find(item => item.stage === 'queued');
   if (queued) {
     await uploadOne(env, game, roblox, queued, save);
-    return minute;
+    return 0;
   }
   const available = await roblox.listThumbnails();
   await checkModeration(roblox, batch, available);

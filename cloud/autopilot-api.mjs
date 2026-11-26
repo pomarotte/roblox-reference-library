@@ -295,7 +295,8 @@ export async function autopilotApi(request, env, owner, ctx) {
       const next = game.paused || !batch || batch.phase === 'complete' ? null
         : reschedule ? Date.now() : row.next_check;
       await saveGame(db, row, game, next);
-      if (!game.paused && batch?.phase === 'generating' && ['start', 'regenerate', 'resume'].includes(body.action)) {
+      if (!game.paused && ((batch?.phase === 'generating' && ['start', 'regenerate', 'resume'].includes(body.action)) ||
+          (batch?.phase === 'testing' && ['approve', 'resume', 'recover'].includes(body.action)))) {
         ctx?.waitUntil?.(env.AUTOPILOT_QUEUE.send({owner, universe}).catch(() => {}));
       }
       return json(publicGame(game));
@@ -333,7 +334,7 @@ export async function runCampaign(env, prompt, owner, universe) {
       }
       if (!game.paused && previousPhase !== 'generating' && batchOf(game)?.phase === 'generating') delay = 0;
       await saveGame(db, row, game, game.paused || delay === null ? null : Date.now() + delay);
-      if (!game.paused && ['generating', 'review'].includes(batchOf(game)?.phase) && delay === 0) {
+      if (!game.paused && ['generating', 'review', 'testing'].includes(batchOf(game)?.phase) && delay === 0) {
         await env.AUTOPILOT_QUEUE.send({owner, universe});
       }
       return true;
