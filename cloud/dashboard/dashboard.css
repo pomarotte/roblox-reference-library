@@ -98,6 +98,31 @@ li { margin: .55rem 0; }
 #autopilot .autopilot-panel > summary { font-weight: 650; }
 #autopilot .autopilot-panel .section-header h3 { margin: 0; }
 .autopilot-panel .thumbnail-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
+#autopilot-assets {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: min(100%, 20rem);
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: .5rem;
+}
+#autopilot-assets details label { display: inline-flex; margin: .35rem .65rem .35rem 0; }
+#autopilot-assets details > button { display: block; }
+.bank-thumbnail-link { display: block; width: 100%; }
+.bank-thumbnail { position: relative; }
+.bank-thumbnail-remove {
+  position: absolute;
+  top: .85rem;
+  right: .85rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.25rem;
+  line-height: 1;
+}
 .autopilot-settings > button { margin-top: .7rem; }
 #autopilot .autopilot-subsection { border-top: 1px solid #32323e; padding-top: .75rem; }
 #autopilot-pick-help { margin: -.3rem 0 .7rem; }

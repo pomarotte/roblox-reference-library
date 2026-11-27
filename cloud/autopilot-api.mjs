@@ -260,6 +260,10 @@ async function updateGame(request, env, row, game, url, body, prompt) {
         `You can save up to ${thumbnailReferenceLimit} thumbnails. Uncheck one and save the brief to make room.`);
       game.brief.references.push(reference);
     }
+  } else if (action === 'removeBankThumbnail') {
+    const index = (game.bank || []).findIndex(item => item.id === body.id);
+    requireInput(index !== -1, 'This thumbnail is no longer in the reserve bank.');
+    game.bank.splice(index, 1);
   } else if (action === 'tagAsset') {
     const asset = game.brief.assets.find(candidate => candidate.id === body.id);
     requireInput(asset && Array.isArray(body.tags) && body.tags.length > 0 &&

@@ -289,6 +289,10 @@ try {
           savedGame.preview = null;
           return Response.json(savedGame);
         }
+        if (command.action === 'removeBankThumbnail') {
+          savedGame.bank = savedGame.bank.filter(item => item.id !== command.id);
+          return Response.json(savedGame);
+        }
         if (command.action === 'pick') {
           savedGame.starting.push({id: 'picked-1', homeId: command.id, existing: true, image: previewUrl(101)});
           return Response.json(savedGame);
@@ -395,7 +399,7 @@ try {
   assert.match(feedback.textContent, /Added to the thumbnail bank/);
   assert.equal(element('autopilot-preview-form').hidden, false);
   assert.equal(element('autopilot-generate').textContent, 'Generate next thumbnail');
-  assert.match(element('autopilot-bank').children[0].href, /image=saved-preview/);
+  assert.match(element('autopilot-bank').children[0].children[0].href, /image=saved-preview/);
   assert.ok(upscaleWorker.terminated);
   savedGame.preview = {id: 'draft-for-gemini'};
   timers.get(20_000)();
@@ -404,10 +408,14 @@ try {
   const rendered = element('autopilot-preview').children[0].children.find(node => node.tagName === 'article');
   assert.match(rendered.children[0].src, /image=gemini-preview/);
   await rendered.children.find(node => node.textContent === 'Accept Gemini recreation').listeners.click();
-  assert.match(element('autopilot-bank').children[0].href, /image=gemini-preview/);
+  assert.match(element('autopilot-bank').children[0].children[0].href, /image=gemini-preview/);
   element('autopilot-bank-upload-file').files = [file('Manual.png')];
   await element('autopilot-bank-upload-form').listeners.submit({target: element('autopilot-bank-upload-form'), preventDefault() {}});
-  assert.match(element('autopilot-bank').children[0].href, /image=manual-preview/);
+  const manualImage = element('autopilot-bank').children[0];
+  assert.match(manualImage.children[0].href, /image=manual-preview/);
+  await manualImage.children[1].listeners.click();
+  assert.match(element('autopilot-bank').children[0].children[0].href, /image=gemini-preview/);
+  assert.match(element('autopilot-bank-upload-feedback').textContent, /removed from the bank/);
 } finally {
   globalThis.fetch = originalFetch;
 }

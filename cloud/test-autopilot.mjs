@@ -421,6 +421,11 @@ try {
   }));
   assert.equal(manual.bank.at(-1).label, 'Finished thumbnail');
   assert.equal(generations.length, beforeUpload, 'A manual bank upload bypasses generation');
+  const deleted = await action('removeBankThumbnail', {id: manual.bank.at(-1).id}, '456');
+  assert.deepEqual(deleted.bank, accepted.bank);
+  assert.deepEqual(deleted.batches, accepted.batches);
+  const testingId = deleted.batches[0].items.find(item => item.stage === 'queued').id;
+  assert.equal((await post('removeBankThumbnail', {id: testingId}, '456')).status, 400);
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;

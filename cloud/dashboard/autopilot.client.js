@@ -555,12 +555,24 @@
       get('autopilot-bank-empty').hidden = count > 0;
       get('autopilot-bank').replaceChildren(...bank.slice().reverse().map(entry => {
         const name = entry.label || 'Accepted thumbnail';
-        const link = el('a', '', 'thumbnail-card');
+        const node = el('article', '', 'thumbnail-card bank-thumbnail');
+        const link = el('a', '', 'bank-thumbnail-link');
         link.href = media(entry.id);
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
         link.append(preview(link.href, name));
-        return link;
+        const feedback = get('autopilot-bank-upload-feedback');
+        const remove = button('×', async () => {
+          if (await act('removeBankThumbnail', {id: entry.id}, undefined, undefined, feedback)) {
+            feedback.textContent = 'Thumbnail removed from the bank.';
+            get('autopilot-bank-upload-file').focus();
+          }
+        });
+        remove.className = 'secondary bank-thumbnail-remove';
+        remove.title = 'Remove from bank';
+        remove.setAttribute('aria-label', `Remove ${name} from the thumbnail bank`);
+        node.append(link, remove);
+        return node;
       }));
     }
     const generate = get('autopilot-generate');
