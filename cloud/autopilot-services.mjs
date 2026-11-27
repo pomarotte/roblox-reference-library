@@ -233,14 +233,27 @@ const directions = [
   'a bright, readable composition focused on the game’s main objective'
 ];
 
-export function describeDraft(brief, index, parent) {
+const explorationDirections = [
+  'a tight first-person view of a player making a consequential choice, with the evidence they are inspecting as the focal point',
+  'a wide environmental reveal with a small or off-screen player, using the setting to show what makes this moment distinctive',
+  'an extreme close-up of a gameplay clue, object, or tell, framed so the viewer can read its significance at a glance',
+  'a medium shot contrasting two characters or subjects in a revealing gameplay interaction, with one unmistakable focal point',
+  'an overhead or side-on composition built around the layout of the scene and the player’s immediate objective',
+  'a tight reaction shot centered on the outcome of a gameplay decision, with the cause suggested at the edge of the frame'
+];
+
+export function describeDraft(brief, index, parent, explore = false) {
   const assets = brief.assets.map(asset => `${asset.kind} ${asset.name}${asset.required ? ' (must include)' : ''}`).join(', ');
+  const direction = explore ? explorationDirections[index % explorationDirections.length] : directions[index % directions.length];
   return [
     `Create a Roblox Home thumbnail for this game. ${brief.description}`,
-    `Explore ${directions[index % directions.length]}. Aim to earn clicks and qualified plays with one clear, readable gameplay hook. Use only characters, environments, and actions grounded in the game context or its own assets.`,
+    `Explore ${direction}. Aim to earn clicks and qualified plays with one clear, readable gameplay hook. Use only characters, environments, and actions grounded in the game context or its own assets.`,
+    explore && 'This is a new concept. Follow the requested shot and pick a distinct gameplay moment or hook that fits it. Change the focal subject, framing, and visual emphasis together. Take broad inspiration from the game brief and references while inventing the staging. A different crop, pose, or lighting pass on the obvious scene is insufficient.',
     parent && `Use the performance reference ${parent.label} as the starting composition. Preserve its recognizable subject and change the camera or emphasis to match this direction.`,
     parent?.description && `The higher-performing thumbnail used this description: ${parent.description.slice(0, 1400)}`,
-    brief.performance && `Test evidence for creative direction: ${brief.performance} Look for visual elements that may explain the difference. Keep promising elements and change one main element at a time. The rates show association only.`,
+    brief.performance && `Test evidence for creative direction: ${brief.performance} ${explore
+      ? 'Use the likely lessons as broad guidance for readability, mood, or emphasis. Do not recreate the measured concepts.'
+      : 'Look for visual elements that may explain the difference. Keep promising elements and change one main element at a time.'} The rates show association only.`,
     assets && `Use these supplied game assets as the source of truth: ${assets}.`,
     brief.references.length && 'Use the attached thumbnail references only for framing, lighting, or composition. Do not reproduce their characters, names, logos or distinctive graphic layouts.',
     'Compose for a 16:9 Home feed tile. Keep the main action readable at small sizes.'
@@ -275,16 +288,22 @@ export async function generateDraft(env, universe, item, brief, prompt, index = 
       : await remoteImage(image);
     parts.push({text: 'This is the selected high-performing thumbnail for your own game.'}, {inlineData: reference});
   }
-  const count = Math.min(brief.references.length, 14 - brief.assets.length - Number(Boolean(item.parent)) - Number(Boolean(item.editFrom)));
+  const count = Math.min(brief.references.length, 14 - brief.assets.length - Number(Boolean(item.parent)) - Number(Boolean(item.editFrom)),
+    item.automatic ? 2 : Infinity);
+  const start = index * count + (item.automatic && count > 0 ? Math.floor(index / Math.ceil(brief.references.length / count)) : 0);
   let encodedBytes = parts.reduce((total, part) => total + (part.inlineData?.data.length || 0), 0);
   for (let offset = 0; offset < count; offset++) {
-    const reference = brief.references[(index * count + offset) % brief.references.length];
+    const reference = brief.references[(start + offset) % brief.references.length];
     let image;
     try { image = await remoteImage(reference.image); }
     catch { throw new Error('A thumbnail reference could not be loaded from Roblox. Remove it or try again later.'); }
     if (encodedBytes + image.data.length > 18_000_000) break;
     encodedBytes += image.data.length;
-    parts.push({text: `Composition and lighting inspiration only: ${reference.name}.`},
+    const role = item.explore ? offset === 0
+      ? 'Use only the visual hierarchy and focal contrast. Follow the requested shot for camera and staging.'
+      : 'Use only the lighting or color contrast. Ignore the scene and layout.'
+      : 'Composition and lighting inspiration only.';
+    parts.push({text: `Thumbnail reference: ${reference.name}. ${role}`},
       {inlineData: image});
   }
   let response;

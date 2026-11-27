@@ -125,6 +125,7 @@ async function updateGame(request, env, row, game, url, body, prompt) {
       (action === 'editPreview' ? description && previous && previous.id === body.id : !previous),
       'Enter a description and review the current thumbnail before starting a new one.');
     const automatic = !description;
+    const index = game.autoPreviewCount || 0;
     let parent;
     if (automatic && !game.brief.description && !game.gameContext) game.gameContext = await thumbnailGameContext(row.universe);
     const brief = {...game.brief, description: game.brief.description || game.gameContext || '', performance: game.performance};
@@ -134,18 +135,18 @@ async function updateGame(request, env, row, game, url, body, prompt) {
         Number.isFinite(item.result.qualifiedPlayRate)).sort((a, b) => b.result.qualifiedPlayRate - a.result.qualifiedPlayRate);
       requireInput(brief.description || brief.assets.length || tested.length,
         'Roblox game details are unavailable. Add a game asset or a creative brief, or enter an optional direction.');
-      if (tested.length) {
+      if (tested.length && index % 4 === 3) {
         const winner = tested[0];
         parent = {id: winner.id, label: winner.label, description: winner.description};
       }
-      description = describeDraft(brief, game.autoPreviewCount || 0, parent).slice(0, 6000);
+      description = describeDraft(brief, index, parent, !parent).slice(0, 6000);
     }
     const item = {id: crypto.randomUUID(), description: action === 'editPreview'
       ? clean(`${previous.description}\n\nEdit: ${description}`, 12000) || description : description,
     label: 'Accepted thumbnail', imageReady: true, stage: 'draft'};
     try {
-      const draft = {...item, description, parent, editFrom: previous?.id};
-      await generateDraft(env, row.universe, draft, brief, prompt, game.autoPreviewCount || 0, true);
+      const draft = {...item, description, parent, automatic, explore: automatic && !parent, editFrom: previous?.id};
+      await generateDraft(env, row.universe, draft, brief, prompt, index, true);
       item.safetyNote = draft.safetyNote;
     } catch (error) { throw new InputError(error.message); }
     game.preview = item;

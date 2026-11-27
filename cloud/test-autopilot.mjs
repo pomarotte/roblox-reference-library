@@ -377,11 +377,24 @@ try {
   const winner = withHistory.batches[0].items.find(item => item.stage === 'queued');
   winner.result = {impressions: 15000, qualifiedPlayRate: .16};
   withHistory.performance = 'Wider framing underperformed on comparable traffic.';
+  withHistory.brief.references = loadedBrief.references;
   sqlite.prepare('UPDATE autopilot_games SET state = ? WHERE universe = ?').run(JSON.stringify(withHistory), '456');
+  referenceDownloads.length = 0;
   const guided = (await action('generatePreview', {description: '   '}, '456')).preview;
   assert.match(guided.description, /Wider framing underperformed/);
-  assert.match(guided.description, /higher-performing thumbnail used this description/);
-  assert.ok(generations.at(-1).some(part => part.inlineData), 'Attach the tested top performer as a visual reference');
+  assert.match(guided.description, /wide environmental reveal/);
+  assert.doesNotMatch(guided.description, /starting composition/);
+  assert.deepEqual(referenceDownloads, savedReferences.slice(2, 4));
+  assert.equal(generations.at(-1).filter(part => part.inlineData).length, 2, 'Exploration skips the winner image');
+  await action('declinePreview', {id: guided.id}, '456');
+  referenceDownloads.length = 0;
+  const nextConcept = (await action('generatePreview', {}, '456')).preview;
+  assert.match(nextConcept.description, /extreme close-up/);
+  assert.deepEqual(referenceDownloads, savedReferences.slice(4, 6));
+  await action('declinePreview', {id: nextConcept.id}, '456');
+  const variation = (await action('generatePreview', {}, '456')).preview;
+  assert.match(variation.description, /higher-performing thumbnail used this description/);
+  assert.equal(generations.at(-1).filter(part => part.inlineData).length, 3, 'A deliberate variation uses the winner and two references');
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;
