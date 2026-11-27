@@ -23,8 +23,9 @@ export async function serveDashboard(request, env, ctx, assets, prompt) {
 
   if (request.method === 'GET' && Object.hasOwn(assets, pathname)) {
     const [body, type] = assets[pathname];
+    // The upscaler loads integrity-checked scripts that generate JavaScript inside this worker.
     const policy = pathname === '/thumbnail-upscaler.js' ? {
-      'Content-Security-Policy': "default-src 'none'; script-src blob: 'wasm-unsafe-eval'; connect-src https://cdn.jsdelivr.net"
+      'Content-Security-Policy': "default-src 'none'; script-src blob: 'unsafe-eval'; connect-src https://cdn.jsdelivr.net https://unpkg.com"
     } : {};
     return new Response(body, {headers: {...headers, ...policy, 'Content-Type': type}});
   }

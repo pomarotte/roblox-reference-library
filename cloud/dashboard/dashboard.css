@@ -111,6 +111,7 @@ button.thumbnail-choice[aria-pressed="true"] .thumbnail-choice-status { color: #
 #autopilot-asset-feedback:empty, #autopilot-upload-feedback:empty { display: none; }
 #autopilot-preview { grid-template-columns: minmax(0, 40rem); }
 #autopilot-preview:empty { display: none; }
+#autopilot-preview-status:empty, #autopilot-bank:empty { display: none; }
 #autopilot-preview-form details { margin: 0; }
 #autopilot-preview-form details label { margin-top: .7rem; }
 #autopilot .autopilot-panel > h3:first-child { margin-top: 0; }

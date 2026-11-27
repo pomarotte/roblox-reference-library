@@ -10,7 +10,8 @@
   let enabled = false, selected, game, round, busy = false, selection = 0;
   let infoVersion, cardsVersion, libraryVersion, liveVersion, briefVersion, tabsVersion, batchOptions;
   let manualVersion;
-  let previewVersion, refreshRevision = 0, refreshing = false, upscaling = false;
+  let previewVersion, bankVersion, refreshRevision = 0, refreshing = false, upscaling = false;
+  const previewStatus = get('autopilot-preview-status');
   const stages = {
     generating: 'Generating', draft: 'Ready to review', generationFailed: 'Generation failed',
     excluded: 'Skipped', queued: 'Approved for submission', submitting: 'Upload unconfirmed',
@@ -130,7 +131,8 @@
     selected = entry?.universe;
     game = null;
     round = null;
-    briefVersion = cardsVersion = libraryVersion = liveVersion = infoVersion = batchOptions = previewVersion = undefined;
+    briefVersion = cardsVersion = libraryVersion = liveVersion = infoVersion = batchOptions = previewVersion = bankVersion = undefined;
+    previewStatus.textContent = '';
     get('autopilot-preview-form').reset();
     reviewSet.clear();
     editedDescriptions.clear();
@@ -168,17 +170,18 @@
     }
   };
 
-  async function act(action, payload = {}, file, query) {
+  async function act(action, payload = {}, file, query, localFeedback) {
     if (!selected || busy) return false;
     const ticket = selection, universe = selected;
     const searching = action === 'references';
     const manualSearch = action === 'searchGames';
-    const feedback = searching || action === 'brief' ? referenceStatus
-      : manualSearch || action === 'addReference' ? manualReferenceStatus : status;
+    const feedback = localFeedback || (searching || action === 'brief' ? referenceStatus
+      : manualSearch || action === 'addReference' ? manualReferenceStatus : status);
     refreshRevision++;
     busy = true;
     section.setAttribute('aria-busy', 'true');
-    feedback.textContent = action === 'generatePreview' ? 'Generating thumbnail…'
+    feedback.textContent = action === 'acceptPreview' ? 'Saving the upscaled thumbnail…'
+      : action === 'generatePreview' ? 'Generating thumbnail…'
       : action === 'editPreview' ? 'Editing thumbnail…'
       : searching || manualSearch ? 'Searching for thumbnail references…' : 'Saving…';
     if (searching) get('autopilot-find').disabled = true;
@@ -202,6 +205,7 @@
       if (action === 'addReference') referenceChoices.delete(payload.id);
       if (action === 'brief') briefVersion = undefined;
       status.textContent = action === 'approve' ? 'Approved. Autopilot will submit the selected images.' : '';
+      if (localFeedback) localFeedback.textContent = '';
       renderAutopilot(view);
       if (searching) {
         const count = view.suggestions.length;
@@ -385,8 +389,11 @@
         if (item.detail) node.append(el('p', item.detail, 'muted'));
         if (item.safetyNote && item.stage === 'draft') node.append(el('p', item.safetyNote));
         if (canReview && item.stage === 'draft' && item.needsUpscale) {
-          node.append(button(item.safetyNote ? 'Reviewed · Accept and upscale' : 'Accept and upscale', () => acceptPreview(item.id)),
-            button('Decline', () => act('declineRoundPreview', {id: item.id})));
+          const feedback = el('p', '', 'muted');
+          feedback.setAttribute('role', 'status');
+          node.append(acceptanceButton(item, feedback), button('Decline', () => {
+            if (!upscaling) act('declineRoundPreview', {id: item.id}, undefined, undefined, feedback);
+          }), feedback);
         } else if (canReview && item.stage === 'draft') {
           const label = el('label', '', 'check-label'), input = el('input');
           input.type = 'checkbox';
@@ -425,39 +432,98 @@
     get('autopilot-approve').disabled = !reviewSet.size;
   }
 
-  async function acceptPreview(id) {
-    if (busy || upscaling) return;
+  function acceptanceButton(item, feedback) {
+    const control = button(item.safetyNote ? 'Reviewed · Accept and upscale' : 'Accept and upscale',
+      () => acceptPreview(item.id, control, feedback));
+    return control;
+  }
+
+  async function acceptPreview(id, control, feedback) {
+    if (upscaling) return;
+    if (busy) {
+      feedback.textContent = 'Wait for the current update to finish, then try again.';
+      return;
+    }
     upscaling = true;
+    const label = control.textContent;
+    control.disabled = true;
+    control.textContent = 'Preparing upscale…';
     const ticket = selection;
-    let worker;
-    status.textContent = 'Upscaling to 1920 × 1080…';
+    const reserve = game.preview?.id === id;
+    let worker, timeout;
+    feedback.textContent = 'Loading the upscaling model…';
     try {
-      const response = await fetch(media(id));
+      const response = await fetch(media(id), {signal: AbortSignal.timeout(30_000)});
       if (!response.ok) throw new Error('The preview could not be loaded.');
       const image = await response.blob();
       worker = new Worker('/thumbnail-upscaler.js');
       const upscaled = await new Promise((resolve, reject) => {
+        const watchProgress = () => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => reject(new Error('Upscaling stopped responding. Try accepting again.')), 120_000);
+        };
+        watchProgress();
+        let lastProgress = -1;
         worker.onerror = () => reject(new Error('The upscaler could not start.'));
+        worker.onmessageerror = () => reject(new Error('The upscaler returned an unreadable result.'));
         worker.onmessage = ({data}) => {
           if (data.error) reject(new Error(data.error));
           else if (data.image) resolve(data.image);
+          else if (Number.isFinite(data.progress)) {
+            watchProgress();
+            const progress = Math.min(100, Math.floor(data.progress * 10) * 10);
+            if (selection === ticket && progress > lastProgress) {
+              lastProgress = progress;
+              control.textContent = `Upscaling… ${progress}%`;
+              feedback.textContent = `Upscaling to 1920 × 1080… ${progress}%`;
+            }
+          }
         };
         worker.postMessage(image);
       });
-      if (selection === ticket && await act('acceptPreview', {}, upscaled, {type: 'accept', id})) {
-        status.textContent = 'Thumbnail accepted at 1920 × 1080.';
+      if (selection !== ticket) return;
+      if (busy) {
+        feedback.textContent = 'Another update is still running. Try accepting again when it finishes.';
+        return;
+      }
+      control.textContent = 'Saving…';
+      if (await act('acceptPreview', {}, upscaled, {type: 'accept', id}, feedback)) {
+        if (reserve) {
+          previewStatus.textContent = 'Added to the thumbnail bank at 1920 × 1080.';
+          get('autopilot-generate').focus();
+        } else status.textContent = 'Thumbnail accepted at 1920 × 1080.';
       }
     } catch (error) {
-      if (selection === ticket) status.textContent = error.message;
+      if (selection === ticket) feedback.textContent = error.message || 'Upscaling failed. Try accepting again.';
     } finally {
+      clearTimeout(timeout);
       worker?.terminate();
+      control.disabled = false;
+      control.textContent = label;
       upscaling = false;
     }
   }
 
   function renderPreview(view) {
     const item = view.preview, count = view.bank?.length || 0;
-    get('autopilot-bank-count').textContent = `${count} thumbnails in reserve`;
+    const bank = view.bank || [];
+    const fingerprint = bank.map(entry => entry.id).join(',');
+    if (bankVersion !== fingerprint) {
+      bankVersion = fingerprint;
+      get('autopilot-bank-count').textContent = `${count} ${count === 1 ? 'thumbnail' : 'thumbnails'} in reserve`;
+      get('autopilot-bank-empty').hidden = count > 0;
+      get('autopilot-bank').replaceChildren(...bank.slice().reverse().map(entry => {
+        const name = entry.label || 'Accepted thumbnail';
+        const link = el('a', '', 'thumbnail-card');
+        link.href = media(entry.id);
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.append(preview(link.href, name));
+        return link;
+      }));
+    }
+    const generate = get('autopilot-generate');
+    if (!generate.disabled) generate.textContent = count ? 'Generate next thumbnail' : 'Generate thumbnail';
     get('autopilot-preview-form').hidden = !!item;
     if (previewVersion === (item?.id || null)) return;
     previewVersion = item?.id || null;
@@ -476,10 +542,10 @@
       if (!edits.value.trim()) return;
       if (!busy && !upscaling) {
         status.textContent = 'Editing thumbnail…';
-        act('editPreview', {id: item.id, description: edits.value});
+        act('editPreview', {id: item.id, description: edits.value}, undefined, undefined, previewStatus);
       }
-    }), button(item.safetyNote ? 'Reviewed · Accept and upscale' : 'Accept and upscale', () => acceptPreview(item.id)),
-    button('Decline', () => { if (!upscaling) act('declinePreview', {id: item.id}); }));
+    }), acceptanceButton(item, previewStatus),
+    button('Decline', () => { if (!upscaling) act('declinePreview', {id: item.id}, undefined, undefined, previewStatus); }));
     panel.replaceChildren(node);
   }
 
@@ -487,7 +553,7 @@
     const minimum = get('autopilot-minimum');
     if (!game || minimum.value === minimum.defaultValue) minimum.value = String(view.minimum);
     minimum.defaultValue = String(view.minimum);
-    if (!game) get('autopilot-brief').open = false;
+    if (!game) get('autopilot-brief').open = !view.brief.description;
     game = view;
     const current = game.batches.at(-1);
     const editable = !current || current.phase === 'complete';
@@ -630,10 +696,10 @@
     submit.disabled = true;
     submit.textContent = 'Generating…';
     try {
-      if (await act('generatePreview', {description: description.value})) description.value = '';
+      if (await act('generatePreview', {description: description.value}, undefined, undefined, previewStatus)) description.value = '';
     } finally {
       submit.disabled = false;
-      submit.textContent = 'Generate thumbnail';
+      submit.textContent = game?.bank?.length ? 'Generate next thumbnail' : 'Generate thumbnail';
     }
   });
   get('autopilot-batches').addEventListener('change', event => {

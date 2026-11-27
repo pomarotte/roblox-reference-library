@@ -73,41 +73,6 @@
       <div id="autopilot-game" hidden>
         <p id="autopilot-progress"></p>
         <div class="autopilot-workspace">
-          <div class="autopilot-panel">
-            <div class="section-header"><h3>Create a thumbnail</h3><p id="autopilot-bank-count" class="muted" aria-live="polite"></p></div>
-            <form id="autopilot-preview-form">
-              <div class="actions"><button id="autopilot-generate" type="submit">Generate thumbnail</button><span class="muted">Uses your game details, references, and past results when available.</span></div>
-              <details class="full-width">
-                <summary>Add creative direction (optional)</summary>
-                <label>What should this thumbnail show?<textarea id="autopilot-preview-description" rows="3" maxlength="6000"></textarea></label>
-              </details>
-            </form>
-            <div id="autopilot-preview" class="thumbnail-grid"></div>
-          </div>
-        <div id="autopilot-review" class="autopilot-panel" hidden>
-          <div class="section-header"><h3 id="autopilot-review-heading" tabindex="-1">Thumbnail batches</h3><label>Round<select id="autopilot-batches"></select></label></div>
-          <div id="autopilot-drafts" class="thumbnail-grid"></div>
-          <p id="autopilot-approval" hidden><button id="autopilot-approve" type="button" disabled>Submit approved thumbnails</button></p>
-        </div>
-          <div id="autopilot-pool" class="autopilot-panel" hidden>
-            <div class="section-header"><h3>Set up a testing round</h3><span id="autopilot-pool-count" class="muted"></span></div>
-            <div class="thumbnail-grid" id="autopilot-starting" aria-label="Starting thumbnails"></div>
-            <form id="autopilot-upload-form">
-              <label>Upload finished thumbnails<input id="autopilot-upload-file" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
-              <div class="actions"><button id="autopilot-upload-submit" class="secondary" type="submit">Add uploads to pool</button></div>
-              <p id="autopilot-upload-feedback" class="muted full-width" role="status"></p>
-            </form>
-            <details id="autopilot-library">
-              <summary>Pick from Roblox thumbnail history</summary>
-              <p><button id="autopilot-load-library" class="secondary" type="button">Refresh thumbnail history</button></p>
-              <div class="thumbnail-grid" id="autopilot-library-list"></div>
-            </details>
-            <form id="autopilot-start-form">
-              <label>Thumbnails per round<input id="autopilot-target" type="number" min="10" max="15" value="10" required></label>
-              <label>Round limit<input id="autopilot-rounds" type="number" min="1" max="10" value="3" required></label>
-              <div class="actions"><button type="submit">Start Autopilot</button><span class="muted">Uses your existing Home thumbnails and accepted images from the reserve bank.</span></div>
-            </form>
-          </div>
           <details id="autopilot-brief" class="autopilot-panel">
             <summary>Creative brief and game assets</summary>
             <form id="autopilot-brief-form">
@@ -137,6 +102,47 @@
             </form>
             <div class="thumbnail-grid" id="autopilot-assets" aria-label="Game assets"></div>
           </details>
+          <div class="autopilot-panel">
+            <div class="section-header"><h3>Create a thumbnail</h3><p id="autopilot-bank-count" class="muted" aria-live="polite"></p></div>
+            <form id="autopilot-preview-form">
+              <div class="actions"><button id="autopilot-generate" type="submit">Generate thumbnail</button><span class="muted">Uses your game details, references, and past results when available.</span></div>
+              <details class="full-width">
+                <summary>Add creative direction (optional)</summary>
+                <label>What should this thumbnail show?<textarea id="autopilot-preview-description" rows="3" maxlength="6000"></textarea></label>
+              </details>
+            </form>
+            <div id="autopilot-preview" class="thumbnail-grid"></div>
+            <p id="autopilot-preview-status" class="muted" role="status"></p>
+          </div>
+          <div class="autopilot-panel">
+            <h3>Thumbnail bank</h3>
+            <p id="autopilot-bank-empty" class="muted">Accepted thumbnails will appear here.</p>
+            <div id="autopilot-bank" class="thumbnail-grid"></div>
+          </div>
+        <div id="autopilot-review" class="autopilot-panel" hidden>
+          <div class="section-header"><h3 id="autopilot-review-heading" tabindex="-1">Thumbnail batches</h3><label>Round<select id="autopilot-batches"></select></label></div>
+          <div id="autopilot-drafts" class="thumbnail-grid"></div>
+          <p id="autopilot-approval" hidden><button id="autopilot-approve" type="button" disabled>Submit approved thumbnails</button></p>
+        </div>
+          <div id="autopilot-pool" class="autopilot-panel" hidden>
+            <div class="section-header"><h3>Set up a testing round</h3><span id="autopilot-pool-count" class="muted"></span></div>
+            <div class="thumbnail-grid" id="autopilot-starting" aria-label="Starting thumbnails"></div>
+            <form id="autopilot-upload-form">
+              <label>Upload finished thumbnails<input id="autopilot-upload-file" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+              <div class="actions"><button id="autopilot-upload-submit" class="secondary" type="submit">Add uploads to pool</button></div>
+              <p id="autopilot-upload-feedback" class="muted full-width" role="status"></p>
+            </form>
+            <details id="autopilot-library">
+              <summary>Pick from Roblox thumbnail history</summary>
+              <p><button id="autopilot-load-library" class="secondary" type="button">Refresh thumbnail history</button></p>
+              <div class="thumbnail-grid" id="autopilot-library-list"></div>
+            </details>
+            <form id="autopilot-start-form">
+              <label>Thumbnails per round<input id="autopilot-target" type="number" min="10" max="15" value="10" required></label>
+              <label>Round limit<input id="autopilot-rounds" type="number" min="1" max="10" value="3" required></label>
+              <div class="actions"><button type="submit">Start Autopilot</button><span class="muted">Uses your existing Home thumbnails and accepted images from the reserve bank.</span></div>
+            </form>
+          </div>
           <div class="autopilot-panel">
         <h3>Live thumbnails</h3>
         <p id="autopilot-pick-help" class="muted">Live thumbnails are included automatically as baselines.</p>

@@ -7,10 +7,17 @@ import {homeAnalytics} from './home-analytics.mjs';
 const origin = 'https://analytics.rolibrary.win';
 const access = {aud: 'dashboard', getIdentity: async () => ({email: 'creator@example.com'})};
 const env = {ACCESS_AUDIENCE: 'dashboard'};
-const assets = {'/': [await readFile(new URL('./dashboard/index.html', import.meta.url), 'utf8'), 'text/html']};
+const assets = {
+  '/': [await readFile(new URL('./dashboard/index.html', import.meta.url), 'utf8'), 'text/html'],
+  '/thumbnail-upscaler.js': ['worker script', 'text/javascript']
+};
 const started = new Date(Date.now() - 6 * 3_600_000).toISOString();
 const credentials = {universe: '123', key: 'example-roblox-key', activatedAt: started};
 const open = (path, init, ctx = {access}) => serveDashboard(new Request(origin + path, init), env, ctx, assets);
+const pagePolicy = (await open('/')).headers.get('Content-Security-Policy');
+const workerPolicy = (await open('/thumbnail-upscaler.js')).headers.get('Content-Security-Policy');
+assert.doesNotMatch(pagePolicy, /'unsafe-eval'/);
+assert.match(workerPolicy, /script-src blob: 'unsafe-eval'/);
 const performance = (body, site = origin, ctx) => open('/api/performance', {
   method: 'POST', headers: {'Content-Type': 'application/json', Origin: site}, body: JSON.stringify(body)
 }, ctx);
@@ -122,7 +129,7 @@ try {
   const browser = {
     document: {getElementById: element, createElement: tagName => Object.assign(element(), {tagName})},
     window: {addEventListener() {}},
-    AbortController, setInterval(fn, interval) { timers.set(interval, fn); },
+    AbortController, AbortSignal, setTimeout, clearTimeout, setInterval(fn, interval) { timers.set(interval, fn); },
     Option: class { constructor(text, value) { Object.assign(this, {text, value}); } },
     ResizeObserver: class { observe() {} },
     fetch: async (path, options) => {
@@ -207,7 +214,13 @@ try {
   const legacyFetch = browser.fetch;
   const approvals = [];
   const uploads = [];
+  let upscaleWorker;
   Object.assign(browser, {URL, URLSearchParams,
+    Worker: class {
+      constructor(path) { assert.equal(path, '/thumbnail-upscaler.js'); upscaleWorker = this; }
+      postMessage(image) { assert.equal(image.type, 'image/jpeg'); }
+      terminate() { this.terminated = true; }
+    },
     location: new URL(`${origin}/?game=456&batch=${openBatch}`), history: {replaceState() {}},
     async fetch(path, options) {
       if (path === '/api/autopilot?') return Response.json({enabled: true,
@@ -216,12 +229,22 @@ try {
         const query = new URL(path, origin).searchParams;
         assert.equal(query.get('game'), '456');
         const type = query.get('type'), name = query.get('name');
+        if (type === 'accept') {
+          assert.equal(query.get('id'), 'draft-preview');
+          assert.equal(options.body.type, 'image/png');
+          savedGame.bank = [{id: 'saved-preview', label: 'Accepted thumbnail'}];
+          savedGame.preview = null;
+          return Response.json(savedGame);
+        }
         uploads.push([type, name]);
         if (name === 'Broken') return Response.json({error: 'Invalid image.'}, {status: 400});
         if (type === 'asset') savedGame.brief.assets.push({id: name, name, kind: query.get('kind')});
         else savedGame.starting.push({id: name, label: name});
         return Response.json(savedGame);
       }
+      if (path === '/api/autopilot?game=456&image=draft-preview') return {
+        ok: true, blob: async () => new Blob(['draft'], {type: 'image/jpeg'})
+      };
       if (path === '/api/autopilot?game=456') {
         if (!options) return Response.json(savedGame);
         const command = JSON.parse(options.body);
@@ -326,6 +349,29 @@ try {
   element('autopilot-wording').value = 'CART CHAOS!';
   await element('autopilot-brief-form').listeners.submit({preventDefault() {}});
   assert.equal(savedGame.brief.wording, 'CART CHAOS!');
+  savedGame.preview = {id: 'draft-preview'};
+  timers.get(20_000)();
+  await new Promise(resolve => setImmediate(resolve));
+  const accept = element('autopilot-preview').children[0].children.find(node => node.textContent === 'Accept and upscale');
+  const feedback = element('autopilot-preview-status');
+  const firstAttempt = accept.listeners.click();
+  assert.equal(accept.disabled, true);
+  await new Promise(resolve => setImmediate(resolve));
+  upscaleWorker.onmessage({data: {progress: .4}});
+  assert.match(feedback.textContent, /Upscaling.*40%/);
+  upscaleWorker.onmessage({data: {error: 'Model could not load.'}});
+  await firstAttempt;
+  assert.equal(feedback.textContent, 'Model could not load.');
+  assert.equal(accept.disabled, false);
+  const secondAttempt = accept.listeners.click();
+  await new Promise(resolve => setImmediate(resolve));
+  upscaleWorker.onmessage({data: {image: new Blob(['upscaled'], {type: 'image/png'})}});
+  await secondAttempt;
+  assert.match(feedback.textContent, /Added to the thumbnail bank/);
+  assert.equal(element('autopilot-preview-form').hidden, false);
+  assert.equal(element('autopilot-generate').textContent, 'Generate next thumbnail');
+  assert.match(element('autopilot-bank').children[0].href, /image=saved-preview/);
+  assert.ok(upscaleWorker.terminated);
 } finally {
   globalThis.fetch = originalFetch;
 }
