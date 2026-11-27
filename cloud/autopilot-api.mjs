@@ -1,6 +1,7 @@
 import {RobloxApiError, homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
-import {findReferences, generateDraft, imageKey, readJson, searchGameReferences, storageKey, storeImage, thumbnailReferenceLimit} from './autopilot-services.mjs';
+import {describeDraft, findReferences, generateDraft, imageKey, readJson, searchGameReferences, storageKey, storeImage,
+  thumbnailGameContext, thumbnailReferenceLimit} from './autopilot-services.mjs';
 
 const universePattern = /^[1-9]\d{0,19}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
@@ -118,19 +119,37 @@ async function updateGame(request, env, row, game, url, body, prompt) {
     await env.WATCH_ACTIVITY.prepare('UPDATE autopilot_games SET secret = ? WHERE owner = ? AND universe = ? AND lease = ?')
       .bind(secret, row.owner, row.universe, row.lease).run();
   } else if (action === 'generatePreview' || action === 'editPreview') {
-    const description = clean(body.description, 6000);
+    let description = clean(body.description, 6000);
     const previous = game.preview;
-    requireInput(prompt && description && (action === 'editPreview' ? previous && previous.id === body.id : !previous),
+    requireInput(prompt && (body.description === undefined || typeof body.description === 'string' && body.description.length <= 6000) &&
+      (action === 'editPreview' ? description && previous && previous.id === body.id : !previous),
       'Enter a description and review the current thumbnail before starting a new one.');
+    const automatic = !description;
+    let parent;
+    if (automatic && !game.brief.description && !game.gameContext) game.gameContext = await thumbnailGameContext(row.universe);
+    const brief = {...game.brief, description: game.brief.description || game.gameContext || '', performance: game.performance};
+    if (automatic) {
+      const tested = game.batches.flatMap(round => round.items).filter(item => !item.existing && item.description &&
+        item.imageReady && item.result?.impressions >= (game.minimum ?? rotationMinimum) &&
+        Number.isFinite(item.result.qualifiedPlayRate)).sort((a, b) => b.result.qualifiedPlayRate - a.result.qualifiedPlayRate);
+      requireInput(brief.description || brief.assets.length || tested.length,
+        'Roblox game details are unavailable. Add a game asset or a creative brief, or enter an optional direction.');
+      if (tested.length) {
+        const winner = tested[0];
+        parent = {id: winner.id, label: winner.label, description: winner.description};
+      }
+      description = describeDraft(brief, game.autoPreviewCount || 0, parent).slice(0, 6000);
+    }
     const item = {id: crypto.randomUUID(), description: action === 'editPreview'
       ? clean(`${previous.description}\n\nEdit: ${description}`, 12000) || description : description,
     label: 'Accepted thumbnail', imageReady: true, stage: 'draft'};
     try {
-      const draft = {...item, description, editFrom: previous?.id};
-      await generateDraft(env, row.universe, draft, game.brief, prompt, 0, true);
+      const draft = {...item, description, parent, editFrom: previous?.id};
+      await generateDraft(env, row.universe, draft, brief, prompt, game.autoPreviewCount || 0, true);
       item.safetyNote = draft.safetyNote;
     } catch (error) { throw new InputError(error.message); }
     game.preview = item;
+    if (automatic) game.autoPreviewCount = (game.autoPreviewCount || 0) + 1;
   } else if (action === 'declinePreview') {
     requireInput(game.preview && game.preview.id === body.id, 'The preview has changed.');
     game.preview = null;
@@ -247,7 +266,7 @@ async function updateGame(request, env, row, game, url, body, prompt) {
       requireInput((game.bank || []).length + game.active.length +
         game.starting.filter(item => !game.active.includes(item.homeId)).length >= body.target,
         'Accept enough thumbnails to fill the round alongside the existing Home thumbnails.');
-      requireInput(body.rounds === 1 || game.brief.description, 'Save a game description for future variations.');
+      if (body.rounds > 1 && !game.brief.description && !game.gameContext) game.gameContext = await thumbnailGameContext(row.universe);
     }
     game.since = new Date().toISOString();
     game.target = body.target;

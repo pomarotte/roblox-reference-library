@@ -487,7 +487,7 @@
     const minimum = get('autopilot-minimum');
     if (!game || minimum.value === minimum.defaultValue) minimum.value = String(view.minimum);
     minimum.defaultValue = String(view.minimum);
-    if (!game) get('autopilot-brief').open = !view.batches.length;
+    if (!game) get('autopilot-brief').open = false;
     game = view;
     const current = game.batches.at(-1);
     const editable = !current || current.phase === 'complete';
@@ -626,8 +626,15 @@
   get('autopilot-preview-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (busy || upscaling) return;
-    status.textContent = 'Generating thumbnail…';
-    await act('generatePreview', {description: get('autopilot-preview-description').value});
+    const submit = get('autopilot-generate'), description = get('autopilot-preview-description');
+    submit.disabled = true;
+    submit.textContent = 'Generating…';
+    try {
+      if (await act('generatePreview', {description: description.value})) description.value = '';
+    } finally {
+      submit.disabled = false;
+      submit.textContent = 'Generate thumbnail';
+    }
   });
   get('autopilot-batches').addEventListener('change', event => {
     round = event.target.value;

@@ -32,7 +32,7 @@ dd { margin: .2rem 0 0; font-weight: 650; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: .65rem .75rem; white-space: nowrap; border-top: 1px solid #303039; }
 th { font-size: .85rem; }
-.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 .chart { padding: 1rem; border: 1px solid #32323e; border-radius: 8px; background: #16161c; min-width: 0; }
 .chart h3 { margin: 0 0 .6rem; font-size: 1rem; }
 .chart-rows, .trend-legend { list-style: none; padding: 0; margin: 0; }
@@ -60,7 +60,6 @@ th { font-size: .85rem; }
 #exact-data { margin-top: 1rem; }
 summary { cursor: pointer; }
 details > label { margin-top: .75rem; }
-@media (max-width: 650px) { .charts { grid-template-columns: 1fr; } }
 #watcher-token-field { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; margin-top: .75rem; }
 #watcher-token-field label { flex: 1 1 16rem; max-width: 34rem; }
 .activity-events { list-style: none; padding: 0; margin: .85rem 0 0; }
@@ -93,12 +92,11 @@ li { margin: .55rem 0; }
 .thumbnail-card details { width: 100%; }
 .check-label { display: flex; align-items: center; gap: .4rem; }
 .generation-description { white-space: pre-wrap; }
-.autopilot-workspace { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1rem; margin-top: 1.25rem; align-items: start; }
+.autopilot-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1.25rem; }
 #autopilot .autopilot-panel { margin: 0; padding: 1rem; border: 1px solid #32323e; border-radius: 10px; background: #16161c; min-width: 0; }
 #autopilot .autopilot-panel > summary { font-weight: 650; }
 #autopilot .autopilot-panel .section-header h3 { margin: 0; }
 .autopilot-panel .thumbnail-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
-.autopilot-settings { border-top: 1px solid #32323e; padding-top: .85rem; }
 .autopilot-settings > button { margin-top: .7rem; }
 #autopilot .autopilot-subsection { border-top: 1px solid #32323e; padding-top: .75rem; }
 #autopilot-pick-help { margin: -.3rem 0 .7rem; }
@@ -111,4 +109,8 @@ button.thumbnail-choice[aria-pressed="true"] .thumbnail-choice-status { color: #
 #autopilot-start-form { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #32323e; padding-top: 1rem; }
 #autopilot-asset-feedback, #autopilot-upload-feedback { margin: 0; }
 #autopilot-asset-feedback:empty, #autopilot-upload-feedback:empty { display: none; }
-@media (max-width: 850px) { .autopilot-workspace { grid-template-columns: 1fr; } }
+#autopilot-preview { grid-template-columns: minmax(0, 40rem); }
+#autopilot-preview:empty { display: none; }
+#autopilot-preview-form details { margin: 0; }
+#autopilot-preview-form details label { margin-top: .7rem; }
+#autopilot .autopilot-panel > h3:first-child { margin-top: 0; }

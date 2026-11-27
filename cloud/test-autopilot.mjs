@@ -143,7 +143,8 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
     ]}]});
   }
   if (pathname === '/universes/v1/places/777/universe') return Response.json({universeId: 852});
-  if (hostname === 'games.roblox.com') return Response.json({data: [{id: 852, name: 'Cart Championship'}]});
+  if (hostname === 'games.roblox.com') return Response.json({data: [{id: 852, name: 'Cart Championship'},
+    {id: 456, name: 'Downhill Carts', genre_l1: 'Racing', genre_l2: 'Arcade', description: 'Steer carts through mountain trails.'}]});
   assert.equal(hostname, 'apis.roblox.com');
   assert.equal(headers['x-api-key'], 'example-key');
   if (rejectedRead && pathname.endsWith(rejectedRead.path)) {
@@ -359,13 +360,28 @@ try {
   const declined = await action('declinePreview', {id: edited.id}, '456');
   assert.equal(declined.preview, null);
   assert.equal(declined.bank?.length || 0, 0);
+  const automatic = (await action('generatePreview', {}, '456')).preview;
+  assert.match(generations.at(-1)[0].text, /Downhill Carts · Racing · Arcade · Steer carts through mountain trails/);
+  assert.match(automatic.description, /one clear, readable gameplay hook/);
+  await action('declinePreview', {id: automatic.id}, '456');
   for (let index = 0; index < 6; index++) await accept((await makePreview()).id);
   assert.deepEqual(sizes.at(-1), {width: 1920, height: 1080, fit: 'cover'});
-  const started = await action('start', {bank: true, target: 10, rounds: 1}, '456');
+  const started = await action('start', {bank: true, target: 10, rounds: 2}, '456');
   assert.equal(started.bank.length, 1);
   assert.equal(started.batches[0].phase, 'testing');
   assert.equal(started.batches[0].items.filter(item => item.stage === 'queued').length, 5);
   assert.equal(started.batches[0].items.filter(item => item.stage === 'live').length, 5);
+  assert.match(started.batches[0].brief.description, /mountain trails/);
+  const saved = sqlite.prepare('SELECT state FROM autopilot_games WHERE universe = ?').get('456');
+  const withHistory = JSON.parse(saved.state);
+  const winner = withHistory.batches[0].items.find(item => item.stage === 'queued');
+  winner.result = {impressions: 15000, qualifiedPlayRate: .16};
+  withHistory.performance = 'Wider framing underperformed on comparable traffic.';
+  sqlite.prepare('UPDATE autopilot_games SET state = ? WHERE universe = ?').run(JSON.stringify(withHistory), '456');
+  const guided = (await action('generatePreview', {description: '   '}, '456')).preview;
+  assert.match(guided.description, /Wider framing underperformed/);
+  assert.match(guided.description, /higher-performing thumbnail used this description/);
+  assert.ok(generations.at(-1).some(part => part.inlineData), 'Attach the tested top performer as a visual reference');
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;

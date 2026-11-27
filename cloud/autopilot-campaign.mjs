@@ -22,6 +22,7 @@ export function createBatch(game, parents = [], startingRound = false) {
   }
   const batch = {id: crypto.randomUUID(), number: game.batches.length + 1, phase: 'generating',
     items: starting, brief: structuredClone(game.brief), results: {}, ...(game.useBank ? {keepBaseline: true} : {})};
+  if (!batch.brief.description && game.useBank) batch.brief.description = game.gameContext || game.name;
   if (game.performance) batch.brief.performance = game.performance;
   const uploaded = starting.length;
   for (let index = batch.items.length; index < game.target; index++) {
@@ -152,7 +153,7 @@ async function checkModeration(roblox, batch, available) {
 }
 
 async function iterate(game, batch, config, available) {
-  if (!Object.keys(batch.results).length || batch.number >= game.rounds) {
+  if (!Object.keys(batch.results).length) {
     batch.phase = 'complete';
     return;
   }
@@ -170,6 +171,10 @@ async function iterate(game, batch, config, available) {
     const summarize = item => `${(item.qualifiedPlayRate * 100).toFixed(2)}% qualified plays on ${item.impressions} impressions: ${item.description}`;
     game.performance = described.length > 1 ? `Higher: ${summarize(described[0])}. Lower: ${summarize(described.at(-1))}.`
       : described.length ? summarize(described[0]) : null;
+  }
+  if (batch.number >= game.rounds) {
+    batch.phase = 'complete';
+    return;
   }
   const images = await robloxImages(candidates.filter(result =>
     !history.some(item => item.homeId === result.homeId && !item.existing)).map(result => result.assetId));

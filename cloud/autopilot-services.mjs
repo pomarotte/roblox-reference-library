@@ -175,9 +175,16 @@ function referenceImages(sources, imagesPerGame) {
 
 const gameId = /^[1-9]\d{0,19}$/;
 
-async function gameDetails(id) {
-  const response = await checkedFetch(`https://games.roblox.com/v1/games?universeIds=${id}`);
+async function gameDetails(id, timeout) {
+  const response = await checkedFetch(`https://games.roblox.com/v1/games?universeIds=${id}`, {}, timeout);
   return (await response.json()).data.find(game => String(game.id) === id);
+}
+
+export async function thumbnailGameContext(universe) {
+  const game = await gameDetails(universe, 5000).catch(() => null);
+  if (!game) return '';
+  return [game.name, game.genre_l1 || game.genre, game.genre_l2, game.description]
+    .filter(value => typeof value === 'string' && value.trim()).join(' · ').slice(0, 1800);
 }
 
 export async function searchGameReferences(universe, query) {
@@ -230,7 +237,7 @@ export function describeDraft(brief, index, parent) {
   const assets = brief.assets.map(asset => `${asset.kind} ${asset.name}${asset.required ? ' (must include)' : ''}`).join(', ');
   return [
     `Create a Roblox Home thumbnail for this game. ${brief.description}`,
-    `Explore ${directions[index % directions.length]}. Only depict characters, environments, and actions that fit the game.`,
+    `Explore ${directions[index % directions.length]}. Aim to earn clicks and qualified plays with one clear, readable gameplay hook. Use only characters, environments, and actions grounded in the game context or its own assets.`,
     parent && `Use the performance reference ${parent.label} as the starting composition. Preserve its recognizable subject and change the camera or emphasis to match this direction.`,
     parent?.description && `The higher-performing thumbnail used this description: ${parent.description.slice(0, 1400)}`,
     brief.performance && `Test evidence for creative direction: ${brief.performance} Look for visual elements that may explain the difference. Keep promising elements and change one main element at a time. The rates show association only.`,
