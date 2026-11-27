@@ -239,6 +239,7 @@ try {
         uploads.push([type, name]);
         if (name === 'Broken') return Response.json({error: 'Invalid image.'}, {status: 400});
         if (type === 'asset') savedGame.brief.assets.push({id: name, name, kind: query.get('kind')});
+        else if (type === 'bank') savedGame.bank.push({id: 'manual-preview', label: name});
         else savedGame.starting.push({id: name, label: name});
         return Response.json(savedGame);
       }
@@ -270,6 +271,22 @@ try {
         }
         if (command.action === 'brief') {
           Object.assign(savedGame.brief, {allowText: command.allowText, wording: command.wording});
+          return Response.json(savedGame);
+        }
+        if (command.action === 'tagAsset') {
+          const asset = savedGame.brief.assets.find(item => item.id === command.id);
+          asset.tags = command.tags;
+          return Response.json(savedGame);
+        }
+        if (command.action === 'recreatePreview') {
+          assert.equal(command.id, savedGame.preview.id);
+          savedGame.preview.recreation = {id: 'gemini-preview'};
+          return Response.json(savedGame);
+        }
+        if (command.action === 'acceptRecreated') {
+          assert.equal(command.recreation, 'gemini-preview');
+          savedGame.bank.push({id: command.recreation});
+          savedGame.preview = null;
           return Response.json(savedGame);
         }
         if (command.action === 'pick') {
@@ -335,9 +352,17 @@ try {
   await element('autopilot-library-list').children[0].listeners.click();
   assert.equal(savedGame.starting[0].homeId, 'old');
   const file = name => ({name, type: 'image/png'});
+  Object.assign(element('autopilot-asset-kind'), {value: 'Character', options: [
+    {value: 'Character'}, {value: 'Environment'}
+  ]});
   element('autopilot-asset-file').files = [file('Driver.png'), file('Map.png')];
   await element('autopilot-asset-form').listeners.submit({target: element('autopilot-asset-form'), preventDefault() {}});
   assert.deepEqual(savedGame.brief.assets.map(asset => asset.name), ['Driver', 'Map']);
+  const tagEditor = element('autopilot-assets').children[1].children.find(node => node.tagName === 'details');
+  tagEditor.children[2].children[0].checked = true;
+  await tagEditor.children.find(node => node.textContent === 'Save tags').listeners.click();
+  assert.deepEqual(savedGame.brief.assets[1].tags, ['Character', 'Environment']);
+  assert.equal(savedGame.brief.assets[0].tags, undefined);
   element('autopilot-upload-file').files = [file('One.png'), file('Broken.png'), file('Two.png')];
   await element('autopilot-upload-form').listeners.submit({target: element('autopilot-upload-form'), preventDefault() {}});
   assert.deepEqual(uploads, [['asset', 'Driver'], ['asset', 'Map'], ['starting', 'One'], ['starting', 'Broken'], ['starting', 'Two']]);
@@ -372,6 +397,17 @@ try {
   assert.equal(element('autopilot-generate').textContent, 'Generate next thumbnail');
   assert.match(element('autopilot-bank').children[0].href, /image=saved-preview/);
   assert.ok(upscaleWorker.terminated);
+  savedGame.preview = {id: 'draft-for-gemini'};
+  timers.get(20_000)();
+  await new Promise(resolve => setImmediate(resolve));
+  await element('autopilot-preview').children[0].children.find(node => node.textContent === 'Recreate with Gemini').listeners.click();
+  const rendered = element('autopilot-preview').children[0].children.find(node => node.tagName === 'article');
+  assert.match(rendered.children[0].src, /image=gemini-preview/);
+  await rendered.children.find(node => node.textContent === 'Accept Gemini recreation').listeners.click();
+  assert.match(element('autopilot-bank').children[0].href, /image=gemini-preview/);
+  element('autopilot-bank-upload-file').files = [file('Manual.png')];
+  await element('autopilot-bank-upload-form').listeners.submit({target: element('autopilot-bank-upload-form'), preventDefault() {}});
+  assert.match(element('autopilot-bank').children[0].href, /image=manual-preview/);
 } finally {
   globalThis.fetch = originalFetch;
 }

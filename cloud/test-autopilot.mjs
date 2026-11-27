@@ -21,6 +21,7 @@ const db = {
   }
 };
 const stored = new Map(), image = new Uint8Array([1, 2, 3]), contentType = 'image/jpeg', sizes = [];
+const encodes = [];
 const queue = [];
 const media = {
   async put(key, data, metadata) { stored.set(key, {data, ...metadata}); },
@@ -32,7 +33,10 @@ const media = {
 const env = {ACCESS_AUDIENCE: 'dashboard', WATCH_ACTIVITY: db, AUTOPILOT_MEDIA: media,
   AUTOPILOT_IMAGES: {input: () => ({transform: size => {
     sizes.push(size);
-    return {output: async ({format}) => ({response: () => new Response(image, {headers: {'Content-Type': format}})})};
+    return {output: async options => {
+      encodes.push(options);
+      return {response: () => new Response(image, {headers: {'Content-Type': options.format}})};
+    }};
   }})},
   AUTOPILOT_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), AUTOPILOT_GEMINI_KEY: 'gemini-test',
   AUTOPILOT_RESEND_KEY: 'resend-test', AUTOPILOT_MAIL_FROM: 'testing@example.com',
@@ -234,7 +238,9 @@ try {
   assert.ok(!sqlite.prepare("SELECT secret FROM autopilot_games WHERE universe = '123'").get().secret.includes('example-key'));
   const library = await action('library');
   assert.equal(library.library.length, 5);
-  await upload('type=asset&kind=Character&name=Cart%20driver&required=1');
+  const uploadedAsset = (await upload('type=asset&kind=Character&name=Cart%20driver&required=1')).brief.assets[0];
+  const tagged = await action('tagAsset', {id: uploadedAsset.id, tags: ['Character', 'Visual style']});
+  assert.deepEqual(tagged.brief.assets[0].tags, ['Character', 'Visual style']);
   const brief = 'Players race downhill in shopping carts.';
   const found = await action('references', {description: brief});
   assert.equal(found.referenceLimit, 8);
@@ -339,6 +345,7 @@ try {
   const draft = {id: crypto.randomUUID(), description: 'Test composition', parent: {image: preview}};
   referenceDownloads.length = 0;
   await generateDraft(env, '123', draft, fullBrief, 'Test prompt', 0);
+  assert.match(generations.at(-1)[1].text, /Character, Visual style/);
   assert.equal(generations.at(-1).filter(part => part.inlineData).length, 14);
   assert.deepEqual(referenceDownloads.slice(1), savedReferences.slice(0, 5));
   referenceDownloads.length = 0;
@@ -352,11 +359,13 @@ try {
   const initial = await makePreview();
   assert.equal(imageSizes.at(-1), '1K');
   assert.deepEqual(sizes.at(-1), {width: 960, height: 540, fit: 'cover'});
+  assert.deepEqual(encodes.at(-1), {format: 'image/png', anim: false});
   assert.match(initial.safetyNote, /reward/);
   assert.equal((await post('generatePreview', {description: 'Another thumbnail'}, '456')).status, 400);
   const edited = (await action('editPreview', {id: initial.id, description: 'Change the camera.'}, '456')).preview;
   assert.notEqual(edited.id, initial.id);
   assert.ok(generations.at(-1)[2].inlineData);
+  assert.equal(generations.at(-1)[2].inlineData.mimeType, 'image/png');
   const declined = await action('declinePreview', {id: edited.id}, '456');
   assert.equal(declined.preview, null);
   assert.equal(declined.bank?.length || 0, 0);
@@ -366,6 +375,7 @@ try {
   await action('declinePreview', {id: automatic.id}, '456');
   for (let index = 0; index < 6; index++) await accept((await makePreview()).id);
   assert.deepEqual(sizes.at(-1), {width: 1920, height: 1080, fit: 'cover'});
+  assert.deepEqual(encodes.at(-1), {format: 'image/jpeg', quality: 95, anim: false});
   const started = await action('start', {bank: true, target: 10, rounds: 2}, '456');
   assert.equal(started.bank.length, 1);
   assert.equal(started.batches[0].phase, 'testing');
@@ -395,6 +405,22 @@ try {
   const variation = (await action('generatePreview', {}, '456')).preview;
   assert.match(variation.description, /higher-performing thumbnail used this description/);
   assert.equal(generations.at(-1).filter(part => part.inlineData).length, 3, 'A deliberate variation uses the winner and two references');
+  const recreation = (await action('recreatePreview', {id: variation.id}, '456')).preview;
+  assert.equal(recreation.id, variation.id, 'Keep the original available for comparison');
+  assert.equal(imageSizes.at(-1), '2K');
+  assert.deepEqual(sizes.at(-1), {width: 1920, height: 1080, fit: 'cover'});
+  assert.equal(generations.at(-1).filter(part => part.inlineData).length, 1, 'Gemini receives just the original thumbnail');
+  assert.match(generations.at(-1)[0].text, /Keep all original lettering exactly as it appears/);
+  assert.equal((await post('acceptRecreated', {id: variation.id, recreation: 'stale'}, '456')).status, 400);
+  const accepted = await action('acceptRecreated', {id: variation.id, recreation: recreation.recreation.id}, '456');
+  assert.equal(accepted.preview, null);
+  assert.equal(accepted.bank.at(-1).id, recreation.recreation.id);
+  const beforeUpload = generations.length;
+  const manual = await success(await endpoint('game=456&type=bank&name=Finished%20thumbnail', {
+    method: 'POST', headers: {Origin: origin, 'Content-Type': contentType}, body: image
+  }));
+  assert.equal(manual.bank.at(-1).label, 'Finished thumbnail');
+  assert.equal(generations.length, beforeUpload, 'A manual bank upload bypasses generation');
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;

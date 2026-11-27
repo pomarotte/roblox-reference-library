@@ -90,6 +90,7 @@ li { margin: .55rem 0; }
 .thumbnail-card p, .thumbnail-card details { margin: 0; }
 .thumbnail-card a, .thumbnail-card summary { font-size: .9rem; }
 .thumbnail-card details { width: 100%; }
+.thumbnail-card > .thumbnail-card { align-self: stretch; }
 .check-label { display: flex; align-items: center; gap: .4rem; }
 .generation-description { white-space: pre-wrap; }
 .autopilot-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1.25rem; }
@@ -107,8 +108,8 @@ button.thumbnail-choice[aria-pressed="true"] .thumbnail-choice-status { color: #
 .reference-choice { cursor: pointer; }
 .reference-choice:hover, .reference-choice:has(input:checked) { border-color: #79cafa; background: #203947; }
 #autopilot-start-form { grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid #32323e; padding-top: 1rem; }
-#autopilot-asset-feedback, #autopilot-upload-feedback { margin: 0; }
-#autopilot-asset-feedback:empty, #autopilot-upload-feedback:empty { display: none; }
+#autopilot-asset-feedback, #autopilot-upload-feedback, #autopilot-bank-upload-feedback { margin: 0; }
+#autopilot-asset-feedback:empty, #autopilot-upload-feedback:empty, #autopilot-bank-upload-feedback:empty { display: none; }
 #autopilot-preview { grid-template-columns: minmax(0, 40rem); }
 #autopilot-preview:empty { display: none; }
 #autopilot-preview-status:empty, #autopilot-bank:empty { display: none; }

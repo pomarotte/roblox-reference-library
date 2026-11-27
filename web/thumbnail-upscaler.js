@@ -30,14 +30,22 @@ self.onmessage = async ({data: image}) => {
     context.drawImage(bitmap, 0, 0);
     input = tf.browser.fromPixels(context.getImageData(0, 0, canvas.width, canvas.height));
     output = await upscaler.upscale(input, {
-      output: 'tensor', patchSize: 96, padding: 8,
+      output: 'tensor', patchSize: 96, padding: 16,
       progress: progress => self.postMessage({progress})
     });
     if (output.shape[0] !== bitmap.height * 2 || output.shape[1] !== bitmap.width * 2) {
       throw new Error('The model returned an unexpected resolution.');
     }
     pixels = tf.tidy(() => output.round().clipByValue(0, 255).toInt());
-    await tf.browser.toPixels(pixels, canvas);
+    const enhanced = new OffscreenCanvas(output.shape[1], output.shape[0]);
+    await tf.browser.toPixels(pixels, enhanced);
+    canvas.width = enhanced.width;
+    canvas.height = enhanced.height;
+    // Blend in the smoothly resized original to soften amplified grain and jagged edges.
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context.globalAlpha = 0.7;
+    context.drawImage(enhanced, 0, 0);
     self.postMessage({image: await canvas.convertToBlob({type: 'image/png'})});
   } catch (error) {
     self.postMessage({error: error.message});

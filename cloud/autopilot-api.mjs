@@ -106,6 +106,27 @@ function finishPreviewReview(batch) {
   if (batch.items.every(item => !['draft', 'generationFailed'].includes(item.stage))) batch.phase = 'testing';
 }
 
+function reviewCandidate(game, batch, id) {
+  if (game.preview?.id === id) return game.preview;
+  if (game.useBank && !game.paused && batch?.phase === 'review') {
+    return batch.items.find(item => item.id === id && item.stage === 'draft' && item.needsUpscale);
+  }
+}
+
+function acceptCandidate(game, batch, item, id) {
+  item.id = id;
+  delete item.recreation;
+  if (item === game.preview) {
+    (game.bank ||= []).push(item);
+    game.preview = null;
+  } else {
+    item.needsUpscale = false;
+    item.stage = 'queued';
+    item.approvedAt = new Date().toISOString();
+    finishPreviewReview(batch);
+  }
+}
+
 async function updateGame(request, env, row, game, url, body, prompt) {
   const batch = batchOf(game);
   const roblox = async () => homeAnalytics(row.universe,
@@ -154,6 +175,24 @@ async function updateGame(request, env, row, game, url, body, prompt) {
   } else if (action === 'declinePreview') {
     requireInput(game.preview && game.preview.id === body.id, 'The preview has changed.');
     game.preview = null;
+  } else if (action === 'recreatePreview' || action === 'acceptRecreated') {
+    const item = reviewCandidate(game, batch, body.id);
+    requireInput(item, 'The preview has changed.');
+    if (action === 'recreatePreview') {
+      requireInput(prompt, 'Gemini recreation is unavailable.');
+      const sourceBrief = item === game.preview ? game.brief : batch.brief;
+      const brief = {description: sourceBrief.description || game.gameContext || '', assets: [], references: []};
+      const draft = {id: crypto.randomUUID(), editFrom: item.id, recreate: true,
+        description: 'Reproduce the supplied image as faithfully as possible at higher resolution. Keep the exact composition, crop, character appearance, pose, lighting, colors, and all existing lettering. Preserve small details. Do not add, remove, move, or redesign anything. The attached image is the sole visual reference. Follow the thumbnail content rules.'};
+      try { await generateDraft(env, row.universe, draft, brief, prompt, 0, true); }
+      catch (error) { throw new InputError(error.message); }
+      item.recreation = {id: draft.id, safetyNote: draft.safetyNote};
+    } else {
+      requireInput(item.recreation && item.recreation.id === body.recreation, 'Review the current Gemini recreation before accepting it.');
+      requireInput(item !== game.preview || (game.bank || []).length < 60, 'The reserve bank has reached 60 thumbnails.');
+      item.safetyNote = item.recreation.safetyNote;
+      acceptCandidate(game, batch, item, item.recreation.id);
+    }
   } else if (action === 'declineRoundPreview') {
     const item = batch?.items.find(candidate => candidate.id === body.id && ['draft', 'generationFailed'].includes(candidate.stage));
     requireInput(game.useBank && !game.paused && batch?.phase === 'review' && item, 'The preview has changed.');
@@ -163,37 +202,28 @@ async function updateGame(request, env, row, game, url, body, prompt) {
     finishPreviewReview(batch);
   } else if (action === 'image' && url.searchParams.get('type') === 'accept') {
     const id = url.searchParams.get('id');
-    const item = game.preview?.id === id ? game.preview : game.useBank && !game.paused && batch?.phase === 'review'
-      ? batch.items.find(candidate => candidate.id === id && candidate.stage === 'draft' && candidate.needsUpscale) : null;
+    const item = reviewCandidate(game, batch, id);
     requireInput(item, 'The preview has changed.');
     requireInput(item !== game.preview || (game.bank || []).length < 60, 'The reserve bank has reached 60 thumbnails.');
     requireInput(request.headers.get('Content-Type') === 'image/png', 'Upscale the preview before accepting it.');
     const acceptedId = crypto.randomUUID();
     try { await storeImage(env, row.universe, acceptedId, request.body, false, 15_000_000, false, true); }
     catch { throw new InputError('The upscaled image could not be saved. Try again.'); }
-    item.id = acceptedId;
-    if (item === game.preview) {
-      (game.bank ||= []).push(item);
-      game.preview = null;
-    } else {
-      item.needsUpscale = false;
-      item.stage = 'queued';
-      item.approvedAt = new Date().toISOString();
-      finishPreviewReview(batch);
-    }
+    acceptCandidate(game, batch, item, acceptedId);
   } else if (action === 'image') {
-    const asset = url.searchParams.get('type') === 'asset';
+    const type = url.searchParams.get('type'), asset = type === 'asset';
     const name = clean(url.searchParams.get('name'), 80);
     const kind = url.searchParams.get('kind');
     requireInput(name && /^image\/(jpeg|png|webp)$/.test(request.headers.get('Content-Type') || ''), 'Choose a named JPEG, PNG, or WebP image.');
-    requireInput(asset ? game.brief.assets.length < 8 && assetKinds.includes(kind)
-      : editablePool(batch) && game.starting.length < 10, asset
+    requireInput(asset ? game.brief.assets.length < 8 && assetKinds.includes(kind) : type === 'bank'
+      ? (game.bank || []).length < 60 : type === 'starting' && editablePool(batch) && game.starting.length < 10, asset
       ? 'Choose an asset type and upload up to eight assets.'
-      : 'You can add up to ten starting images before starting a campaign.');
+      : type === 'bank' ? 'The reserve bank has reached 60 thumbnails.' : 'You can add up to ten starting images before starting a campaign.');
     const id = crypto.randomUUID();
     try { await storeImage(env, row.universe, id, request.body, asset); }
     catch { throw new InputError('The image could not be prepared. Choose a valid image under 8 MB.'); }
     if (asset) game.brief.assets.push({id, name, kind, required: url.searchParams.get('required') === '1'});
+    else if (type === 'bank') (game.bank ||= []).push({id, label: name, stage: 'draft', imageReady: true});
     else game.starting.push({id, label: name, stage: 'draft', imageReady: true});
   } else if (action === 'brief' || action === 'references') {
     const description = clean(body.description, 1800);
@@ -230,6 +260,13 @@ async function updateGame(request, env, row, game, url, body, prompt) {
         `You can save up to ${thumbnailReferenceLimit} thumbnails. Uncheck one and save the brief to make room.`);
       game.brief.references.push(reference);
     }
+  } else if (action === 'tagAsset') {
+    const asset = game.brief.assets.find(candidate => candidate.id === body.id);
+    requireInput(asset && Array.isArray(body.tags) && body.tags.length > 0 &&
+      body.tags.length <= assetKinds.length && body.tags.every(tag => assetKinds.includes(tag)),
+    'Choose at least one valid tag for this image.');
+    asset.tags = [...new Set(body.tags)];
+    asset.kind = asset.tags[0];
   } else if (action === 'removeAsset') {
     game.brief.assets = game.brief.assets.filter(asset => asset.id !== body.id);
   } else if (action === 'library') {
@@ -304,6 +341,7 @@ async function updateGame(request, env, row, game, url, body, prompt) {
     item.stage = 'generating';
     item.imageReady = false;
     item.detail = null;
+    delete item.recreation;
     batch.phase = 'generating';
   } else if (action === 'pause' || action === 'resume' || action === 'sync') {
     requireInput(batch && batch.phase !== 'complete', 'There is no running campaign.');

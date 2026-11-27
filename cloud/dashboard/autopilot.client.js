@@ -141,8 +141,10 @@
     manualReferenceStatus.textContent = '';
     get('autopilot-asset-feedback').textContent = '';
     get('autopilot-upload-feedback').textContent = '';
+    get('autopilot-bank-upload-feedback').textContent = '';
     get('autopilot-asset-form').reset();
     get('autopilot-upload-form').reset();
+    get('autopilot-bank-upload-form').reset();
     get('autopilot-game-search').value = '';
     manualVersion = undefined;
     get('autopilot-game').hidden = true;
@@ -183,6 +185,7 @@
     feedback.textContent = action === 'acceptPreview' ? 'Saving the upscaled thumbnail…'
       : action === 'generatePreview' ? 'Generating thumbnail…'
       : action === 'editPreview' ? 'Editing thumbnail…'
+      : action === 'recreatePreview' ? 'Recreating at 1920 × 1080 with Gemini…'
       : searching || manualSearch ? 'Searching for thumbnail references…' : 'Saving…';
     if (searching) get('autopilot-find').disabled = true;
     if (manualSearch) get('autopilot-game-search-button').disabled = true;
@@ -267,8 +270,26 @@
       return label;
     }));
     get('autopilot-assets').replaceChildren(...brief.assets.map(asset => {
-      const node = card(asset.name, media(asset.id), `${asset.kind}${asset.required ? ' · Must include' : ''}`);
-      node.append(button('Remove asset', () => act('removeAsset', {id: asset.id})));
+      const tags = asset.tags || [asset.kind];
+      const node = card(asset.name, media(asset.id), `${tags.join(', ')}${asset.required ? ' · Must include' : ''}`);
+      const editor = el('details'), feedback = el('p', '', 'muted');
+      feedback.setAttribute('role', 'status');
+      editor.append(el('summary', 'Edit tags'));
+      const inputs = [...(get('autopilot-asset-kind').options || [])].map(option => {
+        const label = el('label', '', 'check-label'), input = el('input');
+        input.type = 'checkbox';
+        input.value = option.value;
+        input.checked = tags.includes(option.value);
+        label.append(input, option.value);
+        editor.append(label);
+        return input;
+      });
+      editor.append(button('Save tags', () => {
+        const selected = inputs.filter(input => input.checked).map(input => input.value);
+        if (!selected.length) feedback.textContent = 'Choose at least one tag.';
+        else return act('tagAsset', {id: asset.id, tags: selected}, undefined, undefined, feedback);
+      }), feedback);
+      node.append(editor, button('Remove asset', () => act('removeAsset', {id: asset.id})));
       return node;
     }));
   }
@@ -391,7 +412,8 @@
         if (canReview && item.stage === 'draft' && item.needsUpscale) {
           const feedback = el('p', '', 'muted');
           feedback.setAttribute('role', 'status');
-          node.append(acceptanceButton(item, feedback), button('Decline', () => {
+          appendUpscaleOptions(node, item, feedback);
+          node.append(button('Decline', () => {
             if (!upscaling) act('declineRoundPreview', {id: item.id}, undefined, undefined, feedback);
           }), feedback);
         } else if (canReview && item.stage === 'draft') {
@@ -436,6 +458,25 @@
     const control = button(item.safetyNote ? 'Reviewed · Accept and upscale' : 'Accept and upscale',
       () => acceptPreview(item.id, control, feedback));
     return control;
+  }
+
+  function appendUpscaleOptions(node, item, feedback) {
+    node.append(acceptanceButton(item, feedback), button(item.recreation ? 'Try Gemini again' : 'Recreate with Gemini', () => {
+      if (!upscaling) return act('recreatePreview', {id: item.id}, undefined, undefined, feedback);
+    }));
+    if (!item.recreation) return;
+    const {id, safetyNote} = item.recreation;
+    const recreation = card('Gemini recreation', media(id), '1920 × 1080 · Check for changes to the original.');
+    if (safetyNote) recreation.append(el('p', safetyNote));
+    recreation.append(button('Accept Gemini recreation', async () => {
+      if (upscaling) return;
+      const reserve = game.preview?.id === item.id;
+      if (await act('acceptRecreated', {id: item.id, recreation: id}, undefined, undefined, feedback) && reserve) {
+        previewStatus.textContent = 'Gemini recreation added to the thumbnail bank.';
+        get('autopilot-generate').focus();
+      }
+    }));
+    node.append(recreation);
   }
 
   async function acceptPreview(id, control, feedback) {
@@ -525,8 +566,9 @@
     const generate = get('autopilot-generate');
     if (!generate.disabled) generate.textContent = count ? 'Generate next thumbnail' : 'Generate thumbnail';
     get('autopilot-preview-form').hidden = !!item;
-    if (previewVersion === (item?.id || null)) return;
-    previewVersion = item?.id || null;
+    const key = item ? `${item.id}:${item.recreation?.id || ''}` : null;
+    if (previewVersion === key) return;
+    previewVersion = key;
     const panel = get('autopilot-preview');
     if (!item) {
       panel.replaceChildren();
@@ -544,8 +586,9 @@
         status.textContent = 'Editing thumbnail…';
         act('editPreview', {id: item.id, description: edits.value}, undefined, undefined, previewStatus);
       }
-    }), acceptanceButton(item, previewStatus),
-    button('Decline', () => { if (!upscaling) act('declinePreview', {id: item.id}, undefined, undefined, previewStatus); }));
+    }));
+    appendUpscaleOptions(node, item, previewStatus);
+    node.append(button('Decline', () => { if (!upscaling) act('declinePreview', {id: item.id}, undefined, undefined, previewStatus); }));
     panel.replaceChildren(node);
   }
 
@@ -581,21 +624,22 @@
     renderDrafts(view, current);
   }
 
-  async function uploadImages(event, asset) {
+  async function uploadImages(event, type) {
     event.preventDefault();
     if (!game || busy) return;
-    const prefix = asset ? 'autopilot-asset' : 'autopilot-upload';
+    const asset = type === 'asset';
+    const prefix = asset ? 'autopilot-asset' : type === 'bank' ? 'autopilot-bank-upload' : 'autopilot-upload';
     const files = [...get(`${prefix}-file`).files];
     const feedback = get(`${prefix}-feedback`), submit = get(`${prefix}-submit`);
-    const remaining = asset ? 8 - game.brief.assets.length : 10 - game.starting.length;
+    const remaining = asset ? 8 - game.brief.assets.length : type === 'bank' ? 60 - (game.bank?.length || 0) : 10 - game.starting.length;
     if (!files.length) return;
     if (files.length > remaining) {
       feedback.textContent = remaining ? `Choose up to ${remaining} more ${remaining === 1 ? 'image' : 'images'}.` : 'The list is full. Remove an image before adding another.';
       return;
     }
     const universe = game.universe, ticket = selection;
-    const settings = asset ? {type: 'asset', kind: get('autopilot-asset-kind').value,
-      required: get('autopilot-asset-required').checked ? '1' : '0'} : {type: 'starting'};
+    const settings = asset ? {type, kind: get('autopilot-asset-kind').value,
+      required: get('autopilot-asset-required').checked ? '1' : '0'} : {type};
     const customName = asset && files.length === 1 ? get('autopilot-asset-name').value.trim() : '';
     const errors = [];
     refreshRevision++;
@@ -663,8 +707,9 @@
     event.preventDefault();
     return act('searchGames', {query: get('autopilot-game-search').value});
   });
-  get('autopilot-asset-form').addEventListener('submit', event => uploadImages(event, true));
-  get('autopilot-upload-form').addEventListener('submit', event => uploadImages(event, false));
+  get('autopilot-asset-form').addEventListener('submit', event => uploadImages(event, 'asset'));
+  get('autopilot-upload-form').addEventListener('submit', event => uploadImages(event, 'starting'));
+  get('autopilot-bank-upload-form').addEventListener('submit', event => uploadImages(event, 'bank'));
   get('autopilot-load-library').addEventListener('click', () => act('library'));
   get('autopilot-library').addEventListener('toggle', event => {
     if (event.target.open && game && !game.library.length) act('library');
