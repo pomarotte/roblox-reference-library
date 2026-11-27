@@ -1,10 +1,10 @@
 import {RobloxApiError, homeAnalytics, homeIds, rotationMinimum, sameSet} from './home-analytics.mjs';
 import {advanceCampaign, batchOf, createBatch, populateLibrary} from './autopilot-campaign.mjs';
-import {describeDraft, findReferences, imageKey, readJson, searchGameReferences, storageKey, storeImage, thumbnailReferenceLimit} from './autopilot-services.mjs';
+import {findReferences, generateDraft, imageKey, readJson, searchGameReferences, storageKey, storeImage, thumbnailReferenceLimit} from './autopilot-services.mjs';
 
 const universePattern = /^[1-9]\d{0,19}$/;
 const idPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
-const assetKinds = ['Character', 'Environment', 'Prop', 'Logo', 'Gameplay screenshot'];
+const assetKinds = ['Character', 'Environment', 'Prop', 'Logo', 'Gameplay screenshot', 'Composition', 'Visual style', 'Lighting', 'Colors', 'Text style'];
 const minute = 60_000;
 const json = (data, status = 200) => Response.json(data, {status, headers: {'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}});
 const clean = (value, max) => typeof value === 'string' && value.length <= max ? value.trim() : '';
@@ -101,7 +101,11 @@ async function connect(db, env, owner, universe, body) {
 
 const editablePool = batch => !batch || batch.phase === 'complete';
 
-async function updateGame(request, env, row, game, url, body) {
+function finishPreviewReview(batch) {
+  if (batch.items.every(item => !['draft', 'generationFailed'].includes(item.stage))) batch.phase = 'testing';
+}
+
+async function updateGame(request, env, row, game, url, body, prompt) {
   const batch = batchOf(game);
   const roblox = async () => homeAnalytics(row.universe,
     await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, row.owner, row.universe, row.secret, true));
@@ -113,6 +117,50 @@ async function updateGame(request, env, row, game, url, body) {
     const secret = await storageKey(env.AUTOPILOT_ENCRYPTION_KEY, row.owner, row.universe, key);
     await env.WATCH_ACTIVITY.prepare('UPDATE autopilot_games SET secret = ? WHERE owner = ? AND universe = ? AND lease = ?')
       .bind(secret, row.owner, row.universe, row.lease).run();
+  } else if (action === 'generatePreview' || action === 'editPreview') {
+    const description = clean(body.description, 6000);
+    const previous = game.preview;
+    requireInput(prompt && description && (action === 'editPreview' ? previous && previous.id === body.id : !previous),
+      'Enter a description and review the current thumbnail before starting a new one.');
+    const item = {id: crypto.randomUUID(), description: action === 'editPreview'
+      ? clean(`${previous.description}\n\nEdit: ${description}`, 12000) || description : description,
+    label: 'Accepted thumbnail', imageReady: true, stage: 'draft'};
+    try {
+      const draft = {...item, description, editFrom: previous?.id};
+      await generateDraft(env, row.universe, draft, game.brief, prompt, 0, true);
+      item.safetyNote = draft.safetyNote;
+    } catch (error) { throw new InputError(error.message); }
+    game.preview = item;
+  } else if (action === 'declinePreview') {
+    requireInput(game.preview && game.preview.id === body.id, 'The preview has changed.');
+    game.preview = null;
+  } else if (action === 'declineRoundPreview') {
+    const item = batch?.items.find(candidate => candidate.id === body.id && ['draft', 'generationFailed'].includes(candidate.stage));
+    requireInput(game.useBank && !game.paused && batch?.phase === 'review' && item, 'The preview has changed.');
+    item.stage = 'excluded';
+    const replacement = game.bank?.shift();
+    if (replacement) batch.items.push({...replacement, stage: 'queued', approvedAt: new Date().toISOString()});
+    finishPreviewReview(batch);
+  } else if (action === 'image' && url.searchParams.get('type') === 'accept') {
+    const id = url.searchParams.get('id');
+    const item = game.preview?.id === id ? game.preview : game.useBank && !game.paused && batch?.phase === 'review'
+      ? batch.items.find(candidate => candidate.id === id && candidate.stage === 'draft' && candidate.needsUpscale) : null;
+    requireInput(item, 'The preview has changed.');
+    requireInput(item !== game.preview || (game.bank || []).length < 60, 'The reserve bank has reached 60 thumbnails.');
+    requireInput(request.headers.get('Content-Type') === 'image/png', 'Upscale the preview before accepting it.');
+    const acceptedId = crypto.randomUUID();
+    try { await storeImage(env, row.universe, acceptedId, request.body, false, 15_000_000, false, true); }
+    catch { throw new InputError('The upscaled image could not be saved. Try again.'); }
+    item.id = acceptedId;
+    if (item === game.preview) {
+      (game.bank ||= []).push(item);
+      game.preview = null;
+    } else {
+      item.needsUpscale = false;
+      item.stage = 'queued';
+      item.approvedAt = new Date().toISOString();
+      finishPreviewReview(batch);
+    }
   } else if (action === 'image') {
     const asset = url.searchParams.get('type') === 'asset';
     const name = clean(url.searchParams.get('name'), 80);
@@ -185,12 +233,22 @@ async function updateGame(request, env, row, game, url, body) {
     game.minimum = body.minimum;
   } else if (action === 'start') {
     requireInput(editablePool(batch), 'Finish the current campaign before starting a new one.');
-    requireInput(Number.isInteger(body.target) && body.target >= Math.max(1, game.starting.length) && body.target <= 10 &&
-      Number.isInteger(body.rounds) && body.rounds >= 1 && body.rounds <= 10, 'Choose 1–10 thumbnails and 1–10 rounds.');
-    requireInput(game.brief.description || (body.target === game.starting.length && body.rounds === 1),
+    const useBank = body.bank === true;
+    const min = useBank ? 10 : Math.max(1, game.starting.length), max = useBank ? 15 : 10;
+    requireInput(Number.isInteger(body.target) && body.target >= min && body.target <= max &&
+      Number.isInteger(body.rounds) && body.rounds >= 1 && body.rounds <= 10,
+    `Choose ${min}–${max} thumbnails and 1–10 rounds.`);
+    requireInput(useBank || game.brief.description || (body.target === game.starting.length && body.rounds === 1),
       'Save a game description before asking Autopilot to generate thumbnails.');
     const config = await (await roblox()).activeConfig();
     game.active = homeIds(config);
+    game.useBank = useBank;
+    if (game.useBank) {
+      requireInput((game.bank || []).length + game.active.length +
+        game.starting.filter(item => !game.active.includes(item.homeId)).length >= body.target,
+        'Accept enough thumbnails to fill the round alongside the existing Home thumbnails.');
+      requireInput(body.rounds === 1 || game.brief.description, 'Save a game description for future variations.');
+    }
     game.since = new Date().toISOString();
     game.target = body.target;
     game.rounds = game.batches.length + body.rounds;
@@ -200,9 +258,9 @@ async function updateGame(request, env, row, game, url, body) {
     game.problem = null;
     createBatch(game, [], true);
   } else if (action === 'approve') {
-    requireInput(batch?.id === body.batch && batch.phase === 'review' && !game.paused &&
+    requireInput(!game.useBank && batch?.id === body.batch && batch.phase === 'review' && !game.paused &&
       Array.isArray(body.ids) && body.ids.length > 0 && body.ids.every(id =>
-        batch.items.some(item => item.stage === 'draft' && item.id === id)), 'Review the current batch and select the final thumbnails to submit.');
+        batch.items.some(item => item.stage === 'draft' && !item.needsUpscale && item.id === id)), 'Review and upscale the final thumbnails before submitting.');
     const config = await (await roblox()).activeConfig();
     const current = homeIds(config);
     requireInput(sameSet(current, game.active), 'The active set changed. Use Sync active set before submitting.');
@@ -219,7 +277,9 @@ async function updateGame(request, env, row, game, url, body) {
     const description = clean(body.description, 6000);
     requireInput(batch?.id === body.batch && ['review', 'generating'].includes(batch.phase) && item && !item.existing &&
       ['draft', 'generationFailed'].includes(item.stage) && description, 'Open the current draft and enter a generation description.');
+    if (item.imageReady && game.useBank) item.editFrom = item.id;
     item.description = description;
+    if (game.useBank) item.needsUpscale = true;
     item.id = crypto.randomUUID();
     item.stage = 'generating';
     item.imageReady = false;
@@ -254,7 +314,7 @@ async function updateGame(request, env, row, game, url, body) {
   }
 }
 
-export async function autopilotApi(request, env, owner, ctx) {
+export async function autopilotApi(request, env, owner, ctx, prompt) {
   const url = new URL(request.url), universe = url.searchParams.get('game') || '';
   if (!enabled(env)) return json(request.method === 'GET' && !universe
     ? {enabled: false, games: []} : {error: 'Autopilot is not configured.'}, request.method === 'GET' && !universe ? 200 : 503);
@@ -288,15 +348,17 @@ export async function autopilotApi(request, env, owner, ctx) {
       ? json({error: 'Autopilot is updating this game. Try again in a moment.'}, 409) : json({error: 'Game not found.'}, 404);
     try {
       const game = JSON.parse(row.state);
-      await updateGame(request, env, row, game, url, body);
+      const previousPhase = batchOf(game)?.phase;
+      await updateGame(request, env, row, game, url, body, prompt);
       const batch = batchOf(game);
-      const reschedule = ['start', 'approve', 'regenerate', 'resume', 'recover', 'sync', 'key'].includes(body.action) ||
+      const finishingPreviewReview = previousPhase === 'review' && batch?.phase === 'testing';
+      const reschedule = finishingPreviewReview || ['start', 'approve', 'regenerate', 'resume', 'recover', 'sync', 'key'].includes(body.action) ||
         (body.action === 'minimum' && batch?.phase === 'testing' && row.next_check !== null);
       const next = game.paused || !batch || batch.phase === 'complete' ? null
         : reschedule ? Date.now() : row.next_check;
       await saveGame(db, row, game, next);
       if (!game.paused && ((batch?.phase === 'generating' && ['start', 'regenerate', 'resume'].includes(body.action)) ||
-          (batch?.phase === 'testing' && ['approve', 'resume', 'recover'].includes(body.action)))) {
+          (batch?.phase === 'testing' && (finishingPreviewReview || ['start', 'approve', 'resume', 'recover'].includes(body.action))))) {
         ctx?.waitUntil?.(env.AUTOPILOT_QUEUE.send({owner, universe}).catch(() => {}));
       }
       return json(publicGame(game));

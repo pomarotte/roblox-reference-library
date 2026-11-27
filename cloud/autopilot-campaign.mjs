@@ -6,17 +6,32 @@ const terminal = new Set(['tested', 'rejected', 'excluded']);
 export const batchOf = game => game.batches.at(-1);
 
 export function createBatch(game, parents = [], startingRound = false) {
-  const starting = startingRound ? game.starting : [];
+  let starting = startingRound ? game.starting : [];
+  if (game.useBank) {
+    const baselines = game.active.map(homeId => ({...game.library.find(item => item.homeId === homeId),
+      id: crypto.randomUUID(), homeId, existing: true, stage: 'live', label: 'Existing baseline'}));
+    const free = game.target - baselines.length;
+    const picked = startingRound ? game.starting.filter(item => !game.active.includes(item.homeId)).slice(0, free) : [];
+    const draftCount = startingRound ? 0 : 2;
+    const reserved = (game.bank ||= []).splice(0, Math.max(0, free - picked.length - draftCount));
+    starting = [...baselines, ...[...picked, ...reserved].map(item => ({
+      ...item, stage: item.existing ? 'moderating' : 'queued', approvedAt: new Date().toISOString()
+    }))];
+    if (startingRound) game.starting = game.starting.filter(item =>
+      !game.active.includes(item.homeId) && !picked.includes(item));
+  }
   const batch = {id: crypto.randomUUID(), number: game.batches.length + 1, phase: 'generating',
-    items: starting, brief: structuredClone(game.brief), results: {}};
+    items: starting, brief: structuredClone(game.brief), results: {}, ...(game.useBank ? {keepBaseline: true} : {})};
+  if (game.performance) batch.brief.performance = game.performance;
   const uploaded = starting.length;
   for (let index = batch.items.length; index < game.target; index++) {
     const parent = parents.length ? parents[(index - uploaded) % parents.length] : undefined;
-    batch.items.push({id: crypto.randomUUID(), label: `Draft ${index + 1}`, parent,
-      stage: 'generating', description: describeDraft(batch.brief, index, parent)});
+    batch.items.push({id: crypto.randomUUID(), label: `Draft ${index + 1}`, parent, needsUpscale: Boolean(game.useBank),
+      stage: 'generating', description: describeDraft(batch.brief, index, parent).slice(0, 6000)});
   }
   game.batches.push(batch);
-  game.starting = [];
+  if (!game.useBank) game.starting = [];
+  else if (!batch.items.some(item => item.stage === 'generating')) batch.phase = 'testing';
   return batch;
 }
 
@@ -45,7 +60,8 @@ export function planSwap(batch, current, rows) {
   }
   if (!ready.length || rows?.length !== 5) return null;
   const replacements = ready.slice(0, 3);
-  const removed = new Set(rows.slice(-replacements.length).map(row => row.homeId));
+  const replaceable = batch.keepBaseline ? rows.filter(row => row.homeId !== batch.baseline) : rows;
+  const removed = new Set(replaceable.slice(-replacements.length).map(row => row.homeId));
   return [...current.filter(id => !removed.has(id)), ...replacements.map(item => item.homeId)];
 }
 
@@ -146,14 +162,24 @@ async function iterate(game, batch, config, available) {
     .sort((left, right) => right.difference - left.difference);
   const candidates = strongest.slice(0, 3);
   const history = game.batches.flatMap(round => round.items);
+  if (game.useBank) {
+    const described = Object.values(batch.results).flatMap(result => {
+      const item = history.find(item => item.homeId === result.homeId && item.description);
+      return item ? [{...result, description: item.description.slice(0, 550)}] : [];
+    }).sort((a, b) => b.qualifiedPlayRate - a.qualifiedPlayRate);
+    const summarize = item => `${(item.qualifiedPlayRate * 100).toFixed(2)}% qualified plays on ${item.impressions} impressions: ${item.description}`;
+    game.performance = described.length > 1 ? `Higher: ${summarize(described[0])}. Lower: ${summarize(described.at(-1))}.`
+      : described.length ? summarize(described[0]) : null;
+  }
   const images = await robloxImages(candidates.filter(result =>
     !history.some(item => item.homeId === result.homeId && !item.existing)).map(result => result.assetId));
   const parents = candidates.flatMap(result => {
     const original = history.find(item => item.homeId === result.homeId && !item.existing);
     const image = images.get(result.assetId);
-    return original || image ? [{id: original?.id, image, label: original?.label || `Thumbnail ${result.homeId}`}] : [];
+    return original || image ? [{id: original?.id, image, label: original?.label || `Thumbnail ${result.homeId}`,
+      description: original?.description}] : [];
   });
-  if (!parents.length) {
+  if (!parents.length && !game.useBank) {
     game.problem = 'The strongest thumbnails are missing image previews. Autopilot will check again.';
     return;
   }
@@ -234,11 +260,11 @@ export async function advanceCampaign(env, owner, game, roblox, save, prompt) {
   if (!batch || game.paused || batch.phase === 'complete') return null;
   game.problem = null;
   if (batch.phase === 'generating') {
-    const drafts = batch.items.filter(item => item.stage === 'generating').slice(0, 3);
+    const drafts = batch.items.filter(item => item.stage === 'generating').slice(0, game.useBank ? 1 : 3);
     if (drafts.length) {
       await Promise.all(drafts.map(async draft => {
         try {
-          await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft));
+          await generateDraft(env, game.universe, draft, batch.brief, prompt, batch.items.indexOf(draft), draft.needsUpscale);
           draft.stage = 'draft';
           draft.imageReady = true;
         } catch (error) {

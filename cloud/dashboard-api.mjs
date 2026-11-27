@@ -5,13 +5,13 @@ import {robloxImages} from './autopilot-services.mjs';
 
 const headers = {
   'Cache-Control': 'no-store',
-  'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https://*.rbxcdn.com https://rbxcdn.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https://*.rbxcdn.com https://rbxcdn.com; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff'
 };
 const json = (data, status = 200) => Response.json(data, {status, headers});
 
-export async function serveDashboard(request, env, ctx, assets) {
+export async function serveDashboard(request, env, ctx, assets, prompt) {
   const {pathname, origin, hostname} = new URL(request.url);
   if (hostname === watchHost) {
     try { return await watcherIngest(request, env.WATCH_ACTIVITY); }
@@ -23,7 +23,10 @@ export async function serveDashboard(request, env, ctx, assets) {
 
   if (request.method === 'GET' && Object.hasOwn(assets, pathname)) {
     const [body, type] = assets[pathname];
-    return new Response(body, {headers: {...headers, 'Content-Type': type}});
+    const policy = pathname === '/thumbnail-upscaler.js' ? {
+      'Content-Security-Policy': "default-src 'none'; script-src blob: 'wasm-unsafe-eval'; connect-src https://cdn.jsdelivr.net"
+    } : {};
+    return new Response(body, {headers: {...headers, ...policy, 'Content-Type': type}});
   }
   if (request.method === 'GET' && pathname === '/api/session') {
     const identity = await ctx.access.getIdentity();
@@ -37,7 +40,7 @@ export async function serveDashboard(request, env, ctx, assets) {
   }
   if (pathname === '/api/autopilot') {
     const identity = await ctx.access.getIdentity();
-    return identity?.email ? autopilotApi(request, env, identity.email.toLowerCase(), ctx)
+    return identity?.email ? autopilotApi(request, env, identity.email.toLowerCase(), ctx, prompt)
       : json({error: 'Sign in with your authorized email address.'}, 403);
   }
   if (pathname !== '/api/performance') return json({error: 'Page not found.'}, 404);

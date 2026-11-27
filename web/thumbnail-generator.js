@@ -704,6 +704,12 @@
     return imagePart(crop);
   }
 
+  async function loadThumbnailPrompt() {
+    const response = await fetch('./thumbnail-prompt.txt');
+    if (!response.ok) throw new Error('The background prompt could not be loaded.');
+    return response.text();
+  }
+
   async function generationParts(concept, textEnabled, wording) {
     const selected = [...references.values()].map(reference => ({...reference, tags: new Set(reference.tags), regions: [...reference.regions]}));
     const mentionedBoxes = new Set();
@@ -718,9 +724,7 @@
     if (selected.some(reference => !reference.tags.size && !reference.regions.some(region => mentionedBoxes.has(region)))) {
       throw new Error('Choose at least one tag or mention a named box for each reference image.');
     }
-    const promptResponse = await fetch('./thumbnail-prompt.txt');
-    if (!promptResponse.ok) throw new Error('The background prompt could not be loaded.');
-    const prompt = await promptResponse.text();
+    const prompt = await loadThumbnailPrompt();
     const textInstruction = textEnabled
       ? wording ? `Render this exact text with the same spelling, punctuation and capitalization: ${JSON.stringify(wording)}. Avoid unrelated lettering and watermarks.`
         : 'Text is allowed. Use wording from the scene description if provided, or use a short title if it fits. Avoid unrelated lettering and watermarks.'
@@ -766,14 +770,14 @@
       }
     }
     if (!hasCharacter) {
-      parts.push({text: 'The following three character reference sheets illustrate Roblox character proportions, blocky bodies, hands and hair. Use them only for Roblox player anatomy when a player is requested. Use only the selected reference tags to guide the rendering style, composition, lighting, and palette. Do not add a player unless requested. Ignore these sheets’ labels, colors, rendering style and layout.'});
+      parts.push({text: 'The following three character reference sheets are optional guidance for newly invented Roblox avatars or an explicit Roblox-style redesign. Never use them to change the anatomy or appearance of an existing reference character. Do not add a player unless requested.'});
       for (let i = 1; i <= 3; i++) {
         const response = await fetch(`./character-references/character-${i}.jpeg`);
         if (!response.ok) throw new Error('Could not load the character references. Please try again.');
         const dataUrl = await asDataUrl(await response.blob());
         parts.push({inlineData: {mimeType: 'image/jpeg', data: dataUrl.split(',')[1]}});
       }
-      parts.push({text: 'The following three face reference sheets contain examples of Roblox GFX facial expressions. Use only when a player character is requested. Choose an appropriate expression and render it in the requested visual style, not the rendering style of these sheets. Do not copy the sheet layout.'});
+      parts.push({text: 'The following three face reference sheets are optional guidance for newly invented Roblox avatars or an explicit Roblox-style redesign. Keep referenced faces recognizable and preserve their facial features.'});
       for (let i = 1; i <= 3; i++) {
         const response = await fetch(`./character-references/faces-${i}.png`);
         if (!response.ok) throw new Error('Could not load the face references. Please try again.');
@@ -1019,7 +1023,7 @@
     try {
       const instructions = iterating ? 'Preserve the recognizable subject and core visual style. Vary the framing, camera, or lighting as requested below.' : changes;
       const {parts, targetBrightness} = editing || iterating ? {parts: [
-        {text: 'Edit this Roblox thumbnail according to the request below. Preserve the composition, subjects, style, and existing lettering except where the request calls for changes. Return the edited image only.'},
+        {text: `${await loadThumbnailPrompt()}\n\nEdit this thumbnail according to the request below. Preserve the composition, subjects, style, and existing lettering except where the request calls for changes consistent with the rules above. Return the edited image only.`},
         {inlineData: {mimeType: result.type, data: (await asDataUrl(result)).split(',')[1]}},
         {text: allowText.checked ? instructions : `${instructions}\nDo not add new lettering outside logos.`}
       ]} : await generationParts(concept, allowText.checked, $('thumbnail-wording').value.trim());

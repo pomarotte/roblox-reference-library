@@ -37,5 +37,5 @@ max_retries = 10
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/thumbnail-prompt.txt"]
+globs = ["**/*.html", "**/*.css", "**/*.client.js", "**/thumbnail-prompt.txt", "**/thumbnail-upscaler.js"]
 fallthrough = false

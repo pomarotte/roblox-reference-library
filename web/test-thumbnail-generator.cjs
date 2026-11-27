@@ -102,7 +102,7 @@ const context = {document, window, Worker, IntersectionObserver, ResizeObserver:
   width: 1920, height: 1088, close() {},
   pixel: file.name ? darkPixel : file.type === 'image/webp' ? galleryPixel : brightPixel
 }), fetch: async (url, options) => {
-  if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => 'background prompt'};
+  if (!options && url.includes('thumbnail-prompt')) return {ok: true, text: async () => fs.readFileSync(require('node:path').join(__dirname, 'thumbnail-prompt.txt'), 'utf8')};
   if (!options && url.includes('character-references')) return {ok: true, blob: async () => ({type: url.endsWith('.png') ? 'image/png' : 'image/jpeg'})};
   if (url.startsWith('https://references.rolibrary.win/')) {
     lookupRequests.push(url);
@@ -236,6 +236,8 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   assert.equal(calls.length, 1);
   assert.equal(calls[0].generationConfig.imageConfig.imageSize, '2K');
   const [background, characterBrief, ...labeledImages] = calls[0].contents[0].parts;
+  assert.match(background.text, /Exclude blood/);
+  assert.match(background.text, /unless the user explicitly requests a Roblox-style redesign/);
   assert.match(background.text, /Use @Image 3 as the dragon and @Image 2 for the setting/);
   assert.match(characterBrief.text, /use @Image 3 as the subject to restage/);
   const requestParts = [background, ...labeledImages];
@@ -336,6 +338,8 @@ vm.runInNewContext(fs.readFileSync('web/thumbnail-generator.js', 'utf8'), contex
   await submitEdit();
   const firstEdit = calls[4].contents[0].parts;
   assert.equal(firstEdit.length, 3);
+  assert.match(firstEdit[0].text, /Exclude blood/);
+  assert.match(firstEdit[0].text, /unless the user explicitly requests a Roblox-style redesign/);
   assert.equal(atob(firstEdit[1].inlineData.data), 'output-4');
   assert.match(firstEdit[2].text, /^Make the sky purple\nDo not add new lettering outside logos\.$/);
   assert.equal(element('thumbnail-status').textContent, 'Edit ready · 960 × 540');

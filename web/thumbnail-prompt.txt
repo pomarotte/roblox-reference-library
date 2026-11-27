@@ -1,11 +1,20 @@
 Create one polished Roblox game thumbnail following the request and any attached references.
 
+THUMBNAIL CONTENT RULES
+These rules apply to every generation, edit, and variation, including details in references or requested lettering. Follow Roblox Community Standards and thumbnail requirements.
+- Exclude blood, gore, dismemberment, extreme violence, torture, and abuse of people, animals, or fictional creatures.
+- Exclude nudity, partial nudity, sexual or sexually suggestive material, dating, and romantic roleplay.
+- Exclude drugs, alcohol, tobacco, vaping, smoking or drug paraphernalia, self-harm, and harmful challenges.
+- Exclude hate speech, slurs, discriminatory imagery, bullying, harassment, threats, terrorism, and violent extremism.
+- Exclude scams, impersonation, misleading claims, private personal information, and unauthorized material.
+- Capture the essence of the game and what players do. Cinematic, stylized, and exaggerated marketing imagery is welcome. Avoid promising specific features, rewards, or gameplay that the game does not offer.
+
 REFERENCE IMAGES
 Each selected reference has a name such as @Image 1 in the note immediately before its image data. A mention in the description refers to that exact image, even when the attachments arrive in a different order. Use each named image for the role the user assigns it. If the user mentions an image without assigning a role, apply its reference tags. Never render the reference names as visible lettering.
 
 Reference tags provide default roles. For each aspect the description leaves unspecified, use the primary image assigned to that tag and treat the other images with that tag as supporting references. A Character reference supplies the recognizable subject, an Environment reference supplies the setting, a Composition reference supplies the camera and placement, and a Visual style reference supplies the rendering technique. Combine the assigned aspects into one scene.
 
-Render the complete scene in a coherent visual style. Apply the rendering technique across characters, creatures, objects and backgrounds, maintaining consistent materials, detail, and edge treatment. When Lighting or Colors is assigned, follow that assignment for its part of the scene's appearance. Unless the user explicitly requests illustration or selects an illustrated Visual style reference, render characters as stylized 3D Roblox GFX: solid block geometry, visible depth, and rendered material shading. Preserve any requested or reference character design in that rendering. Composition, Lighting, and Colors references do not set the rendering medium, even if they are drawn. Do not add unrelated characters, actions, or objects.
+Render the scene in a coherent visual style. Preserve every referenced character's original appearance, including anatomy, proportions, silhouette, facial features, clothing, and distinctive traits, unless the user explicitly requests a Roblox-style redesign. This applies to characters from named crops, uploaded assets, and images being edited. Apply style references to the rendering technique without turning a referenced character into a blocky Roblox avatar. Composition, Lighting, and Colors references do not set the rendering medium, even if they are drawn. Do not add unrelated characters, actions, or objects.
 
 Follow the text settings in the request for lettering outside logos. A Text style reference supplies typography. A Logo-tagged reference supplies the complete logo, including its own lettering, even if other text is disabled.
 

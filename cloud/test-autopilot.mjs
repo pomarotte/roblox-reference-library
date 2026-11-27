@@ -20,7 +20,7 @@ const db = {
     }};
   }
 };
-const stored = new Map(), image = new Uint8Array([1, 2, 3]), contentType = 'image/jpeg';
+const stored = new Map(), image = new Uint8Array([1, 2, 3]), contentType = 'image/jpeg', sizes = [];
 const queue = [];
 const media = {
   async put(key, data, metadata) { stored.set(key, {data, ...metadata}); },
@@ -30,9 +30,10 @@ const media = {
   }
 };
 const env = {ACCESS_AUDIENCE: 'dashboard', WATCH_ACTIVITY: db, AUTOPILOT_MEDIA: media,
-  AUTOPILOT_IMAGES: {input: () => ({transform: () => ({output: async ({format}) => ({
-    response: () => new Response(image, {headers: {'Content-Type': format}})
-  })})})},
+  AUTOPILOT_IMAGES: {input: () => ({transform: size => {
+    sizes.push(size);
+    return {output: async ({format}) => ({response: () => new Response(image, {headers: {'Content-Type': format}})})};
+  }})},
   AUTOPILOT_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'), AUTOPILOT_GEMINI_KEY: 'gemini-test',
   AUTOPILOT_RESEND_KEY: 'resend-test', AUTOPILOT_MAIL_FROM: 'testing@example.com',
   AUTOPILOT_QUEUE: {send: async message => { queue.push(message); }}};
@@ -41,7 +42,7 @@ const pending = [];
 const user = (email = owner) => ({access: {aud: 'dashboard', getIdentity: async () => ({email})},
   waitUntil: promise => pending.push(promise)});
 const endpoint = (query = '', init, ctx = user()) => serveDashboard(
-  new Request(`${origin}/api/autopilot?${query}`, init), env, ctx, {});
+  new Request(`${origin}/api/autopilot?${query}`, init), env, ctx, {}, 'Shared thumbnail rules');
 const post = (action, payload = {}, universe = '123', email = owner) => endpoint(`game=${universe}`, {
   method: 'POST', headers: {Origin: origin, 'Content-Type': 'application/json'}, body: JSON.stringify({action, ...payload})
 }, user(email));
@@ -75,7 +76,7 @@ for (const [index, id] of active.entries()) {
   variants.set(id, {homepageThumbnailId: id, assetId: 100 + index, moderationStatus: 'Approved', homepageThumbnailStatus: 'Active',
     rate: .2 - index * .02});
 }
-const emails = [], generations = [], submissions = [], swaps = [];
+const emails = [], generations = [], submissions = [], swaps = [], imageSizes = [];
 let currentGenerations = 0, peakGenerations = 0;
 const referenceDownloads = [];
 const operations = new Map();
@@ -103,6 +104,10 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
   if (hostname === 'generativelanguage.googleapis.com') {
     const content = JSON.parse(body);
     if (pathname.includes('gemini-3.1-flash-lite')) {
+      if (content.generationConfig.responseJsonSchema.type === 'object') {
+        assert.match(content.systemInstruction.parts[0].text, /Shared thumbnail rules/);
+        return Response.json({candidates: [{content: {parts: [{text: '{"reason":"Check the depicted reward."}'}]}}]});
+      }
       const input = JSON.parse(content.contents[0].parts[0].text);
       assert.deepEqual(input.candidates.map(game => game.id).sort(), ['456', '789']);
       assert.equal(headers['x-goog-api-key'], 'gemini-test');
@@ -113,6 +118,7 @@ globalThis.fetch = async (url, {body, headers, redirect} = {}) => {
       ])}]}}]});
     }
     generations.push(content.contents[0].parts);
+    imageSizes.push(content.generationConfig.imageConfig.imageSize);
     currentGenerations++;
     peakGenerations = Math.max(peakGenerations, currentGenerations);
     await new Promise(resolve => setImmediate(resolve));
@@ -337,6 +343,29 @@ try {
   referenceDownloads.length = 0;
   await generateDraft(env, '123', draft, fullBrief, 'Test prompt', 1);
   assert.deepEqual(referenceDownloads.slice(1), [...savedReferences.slice(5), ...savedReferences.slice(0, 2)]);
+  const makePreview = async () => (await action('generatePreview', {description: 'Race downhill in a cart.'}, '456')).preview;
+  const upscaled = new Uint32Array([0x474e5089, 0x0a1a0a0d, 0x0d000000, 0x52444849, 0x80070000, 0x38040000]);
+  const accept = async id => success(await endpoint(`game=456&type=accept&id=${id}`, {
+    method: 'POST', headers: {Origin: origin, 'Content-Type': 'image/png'}, body: upscaled
+  }));
+  const initial = await makePreview();
+  assert.equal(imageSizes.at(-1), '1K');
+  assert.deepEqual(sizes.at(-1), {width: 960, height: 540, fit: 'cover'});
+  assert.match(initial.safetyNote, /reward/);
+  assert.equal((await post('generatePreview', {description: 'Another thumbnail'}, '456')).status, 400);
+  const edited = (await action('editPreview', {id: initial.id, description: 'Change the camera.'}, '456')).preview;
+  assert.notEqual(edited.id, initial.id);
+  assert.ok(generations.at(-1)[2].inlineData);
+  const declined = await action('declinePreview', {id: edited.id}, '456');
+  assert.equal(declined.preview, null);
+  assert.equal(declined.bank?.length || 0, 0);
+  for (let index = 0; index < 6; index++) await accept((await makePreview()).id);
+  assert.deepEqual(sizes.at(-1), {width: 1920, height: 1080, fit: 'cover'});
+  const started = await action('start', {bank: true, target: 10, rounds: 1}, '456');
+  assert.equal(started.bank.length, 1);
+  assert.equal(started.batches[0].phase, 'testing');
+  assert.equal(started.batches[0].items.filter(item => item.stage === 'queued').length, 5);
+  assert.equal(started.batches[0].items.filter(item => item.stage === 'live').length, 5);
 } finally {
   globalThis.fetch = originalFetch;
   globalThis.Date = RealDate;
